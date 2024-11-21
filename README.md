@@ -1,98 +1,100 @@
-# dcm-import-module
+# Digital Curation Manager - Import Module
 
-This package implements the OpenAPI Specification defined in the [dcm-import-module-api](https://github.com/lzv-nrw/dcm-import-module-api) project of lzv.nrw.
+The 'DCM Import Module'-API provides functionality to import
+* Intellectual Entities (IEs) from a remote system and
+* pre-built Information Packages (IPs) from the internal storage.
 
-## Run with python
-Run the 'DCM Import Module'-app locally with
-```
-flask run --port=8080
-```
+This repository contains the corresponding Flask app definition.
+For the associated OpenAPI-document, please refer to the sibling package [`dcm-import-module-api`](https://github.com/lzv-nrw/dcm-import-module-api).
 
-## Run with Docker
-Use the `compose.yml` to start the `DCM Import Module`-Container as a service:
+The contents of this repository are part of the [`Digital Curation Manager`](https://github.com/lzv-nrw/digital-curation-manager).
+
+## Local install
+Make sure to include the extra-index-url `https://zivgitlab.uni-muenster.de/api/v4/projects/9020/packages/pypi/simple` in your [pip-configuration](https://pip.pypa.io/en/stable/cli/pip_install/#finding-packages) to enable an automated install of all dependencies.
+Using a virtual environment is recommended.
+
+1. Install with
+   ```
+   pip install .
+   ```
+1. Configure service environment to fit your needs ([see here](#environmentconfiguration)).
+1. Run app as
+   ```
+   flask run --port=8080
+   ```
+1. To manually use the API, either run command line tools like `curl` as, e.g.,
+   ```
+   curl -X 'POST' \
+     'http://localhost:8080/import/external' \
+     -H 'accept: application/json' \
+     -H 'Content-Type: application/json' \
+     -d '{
+     "import": {
+       "plugin": "string",
+       "args": {
+         "metadata_prefix": "oai_dc"
+       }
+     },
+     "build": {
+       "configuration": "<base64-string of serialized python-object>",
+       "BagItProfile": "https://www.lzv.nrw/bagit_profile_v1.0.0.json",
+       "BagItPayloadProfile": "https://www.lzv.nrw/bagit_profile_v1.0.0.json"
+     },
+     "validation": {
+       "modules": [
+         "bagit_profile",
+         "payload_structure",
+         "payload_integrity",
+         "file_format"
+       ],
+       "args": {
+         "bagit_profile": {
+           "baginfoTagCaseSensitive": true,
+           "profileUrl": "bagit_profiles/dcm_bagit_profile_v1.0.0.json"
+         },
+         "payload_structure": {
+           "profileUrl": "bagit_profiles/dcm_bagit_profile_v1.0.0.json"
+         }
+       }
+     }
+   }'
+   ```
+   or run a gui-application, like Swagger UI, based on the OpenAPI-document provided in the sibling package [`dcm-import-module-api`](https://github.com/lzv-nrw/dcm-import-module-api).
+
+## Run with docker compose
+Simply run
 ```
 docker compose up
 ```
-(to rebuild use `docker compose build`).
+By default, the app listens on port 8080.
+The docker volume `file_storage` is automatically created and data will be written in `/file_storage`.
+To rebuild an already existing image, run `docker compose build`.
 
-A Swagger UI is hosted at
+Additionally, a Swagger UI is hosted at
 ```
 http://localhost/docs
 ```
-while (by-default) the app listens to port `8080`.
 
-Afterwards, stop the process for example with `Ctrl`+`C` and enter `docker compose down`.
+Afterwards, stop the process and enter `docker compose down`.
 
-The build process requires authentication with `zivgitlab.uni-muenster.de` in order to gain access to the required python dependencies.
-The Dockerfiles are configured to use the information from `~/.netrc` for this authentication (a gitlab api-token is required).
-
-## Plugins
-### Test plugin
-* has to be activated with environment variable `export USE_TEST_PLUGIN=1`
-* plugin identifer: `test`
-* supports the `args`
-  * `randomize`: (optional; default: false) boolean (make variations in metadata)
-  * `number`: (optional; default: 1) integer (number of ies to generate)
-* example call:
-  ```
-  curl -X POST "http://localhost:8080/import/external" -H  "accept: application/json" -H  "Content-Type: application/json" -d '{"import": {"plugin": "test", "args": {"randomize": true, "number": 3}, "build": {"configuration": "..."}}}'
-  ```
-
-## Test the request to the `IP Builder` service locally in Python
-Create a test folder and set the environment variables `FS_MOUNT_POINT` and
-`USE_TEST_PLUGIN` with
+## Tests
+Install additional dev-dependencies with
 ```
-mkdir -p test_folder
-export FS_MOUNT_POINT=test_folder
-export USE_TEST_PLUGIN=1
+pip install -r dev-requirements.txt
+```
+Run unit-tests with
+```
+pytest -v -s
 ```
 
-Run the 'DCM Import Module'-app locally with
-```
-flask run --port=8080
-```
+## List of plugins
+Part of this implementation is a plugin-system for IE-imports.
+It is based on a common interface and can be used to add support for new source-systems.
+Currently, the following plugins are pre-defined:
+* `demo`: generates test-data in a OAI-PMH-like format (needs to be enabled explicitly)
+* `oai_pmh`: import based on the OAI-protocol for metadata harvesting
 
-Start the 'DCM IP Builder'-app locally with
-```
-export FS_MOUNT_POINT=<path to the test_folder inside the dcm-import-module directory>
-flask run --port=8083
-```
-
-Start the 'DCM Object Validator'-app locally with
-```
-export FS_MOUNT_POINT=<path to the test_folder inside the dcm-import-module directory>
-flask run --port=8082
-```
-
-```
-curl -X POST "http://localhost:8080/import/external" -H  "accept: application/json" -H  "Content-Type: application/json" -d '{"import": {
-    "plugin": "test",
-    "args": {"randomize": true, "number": 2},
-    "validation": {"modules": ["payload_integrity", "payload_structure"]},
-    "build": {"configuration":
-        "gASV0AMAAAAAAACMCmRpbGwuX2RpbGyUjAxfY3JlYXRlX3R5cGWUk5QoaACMCl9sb2FkX3R5cGWUk5SMBHR5cGWUhZRSlIwLQnVpbGRDb25maWeUaASMBm9iamVjdJSFlFKUhZR9lCiMCl9fbW9kdWxlX1+UjA9mYWtlX2NvbmZpZ191cmyUjAlDT05WRVJURVKUaAIoaAeMDkNvbnZlcnRlckNsYXNzlGgLhZR9lChoDmgPjAhnZXRfZGljdJRoAIwQX2NyZWF0ZV9mdW5jdGlvbpSTlChoAIwMX2NyZWF0ZV9jb2RllJOUKEMCAAGUSwJLAEsASwJLAUtDQwRkAFMAlE6FlCmMBHNlbGaUjA9zb3VyY2VfbWV0YWRhdGGUhpSMCDxzdHJpbmc+lGgUSwNDAgQBlCkpdJRSlH2UjAhfX25hbWVfX5RoD3NoFE5OdJRSlH2UfZQojA9fX2Fubm90YXRpb25zX1+UfZSMDF9fcXVhbG5hbWVfX5SMF0NvbnZlcnRlckNsYXNzLmdldF9kaWN0lHWGlGKMB19fZG9jX1+UTnV0lFKUjAhidWlsdGluc5SMB3NldGF0dHKUk5RoMGgraBGHlFIwjAZNQVBQRVKUaAIoaAeMC01hcHBlckNsYXNzlGgLhZR9lChoDmgPjAxnZXRfbWV0YWRhdGGUaBYoaBgoQwIAAZRLA0sASwBLA0sBS0NoGmgbKWgcjANrZXmUaB2HlGgfaDlLBmggKSl0lFKUfZRoJGgPc2g5Tk50lFKUfZR9lChoKX2UaCuMGE1hcHBlckNsYXNzLmdldF9tZXRhZGF0YZR1hpRiaC5OdXSUUpRoM2hIaCtoNoeUUjBoLk51dJRSlGg/KGgkaA9oLk6MC19fcGFja2FnZV9flIwAlIwKX19sb2FkZXJfX5ROjAhfX3NwZWNfX5SMEV9mcm96ZW5faW1wb3J0bGlilIwKTW9kdWxlU3BlY5STlCmBlH2UKIwEbmFtZZRoD4wGbG9hZGVylE6MBm9yaWdpbpSMEmZha2VfY29uZmlnX3VybC5weZSMDGxvYWRlcl9zdGF0ZZROjBpzdWJtb2R1bGVfc2VhcmNoX2xvY2F0aW9uc5ROjA1fc2V0X2ZpbGVhdHRylImMB19jYWNoZWSUTnVijAxfX2J1aWx0aW5zX1+UY2J1aWx0aW5zCl9fZGljdF9fCmgRaDBoNmhIaAhoS3UwaCMoaCRoD2guTmhMaE1oTk5oT2hTaF1jYnVpbHRpbnMKX19kaWN0X18KaBFoMGg2aEhoCGhLdTBoM2hLaCtoCIeUUjAu"
-      }
-    }
-}'
-```
-
-The json-response should contain a `token`-value
-that can be used to get the corresponding report (replace `<token_value>`):
-```
-curl -X 'GET' \
-  'http://localhost:8080/report?token=<token_value>' \
-  -H 'accept: application/json'
-```
-In most cases, it is be more convenient to get this information
-via web-browser by simply entering the respective url
-```
-http://localhost:8080/report?token=<token_value>
-```
-
-Finally, delete the test directory with
-```
-rm -r test_folder
-```
+The expected call signatures for individual plugins are provided via the API (endpoint `GET-/identify`).
 
 ## Environment/Configuration
 Service-specific environment variables are
@@ -109,7 +111,7 @@ Additionally this service provides environment options for
 * `OrchestratedAppConfig`, and
 * `FSConfig`
 
-as listed [here](https://github.com/lzv-nrw/dcm-common/-/tree/dev?ref_type=heads#app-configuration).
+as listed [here](https://github.com/lzv-nrw/dcm-common#app-configuration).
 
 # Contributors
 * Sven Haubold
@@ -119,3 +121,4 @@ as listed [here](https://github.com/lzv-nrw/dcm-common/-/tree/dev?ref_type=heads
 * Michael Rahier
 * Steffen Richters-Finger
 * Malte Windrath
+* Roman Kudinov

@@ -1,10 +1,12 @@
 from setuptools import setup
 
 setup(
-    version="3.0.0",
+    version="3.0.1",
     name="dcm-import-module",
-    description="flask app for import-module-containers",
+    description="flask app implementing the DCM Import Module API",
     author="LZV.nrw",
+    license="MIT",
+    python_requires=">=3.10",
     install_requires=[
         "flask==3.*",
         "PyYAML==6.*",
