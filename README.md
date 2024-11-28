@@ -100,8 +100,7 @@ The expected call signatures for individual plugins are provided via the API (en
 Service-specific environment variables are
 * `IE_OUTPUT` [DEFAULT "ie/"] output directory for extracted IEs (relative to `FS_MOUNT_POINT`)
 * `SOURCE_SYSTEM_TIMEOUT` [DEFAULT 30] time until a request made to a source system times out in seconds
-* `TRANSFER_RETRIES` [DEFAULT 3]: number of retries for failed import
-* `TRANSFER_RETRY_INTERVAL` [DEFAULT 360]: interval between retries in seconds
+* `SOURCE_SYSTEM_TIMEOUT_RETRIES` [DEFAULT 3]: number of retries for failed import
 * `USE_TEST_PLUGIN` [DEFAULT 0]: make the test-plugin available
 * `IP_BUILDER_HOST` [DEFAULT http://localhost:8083] host address for IP Builder-service
 * `IP_BUILDER_JOB_TIMEOUT` [DEFAULT 3600]: time until a job of the ip-builder-service times out in seconds
