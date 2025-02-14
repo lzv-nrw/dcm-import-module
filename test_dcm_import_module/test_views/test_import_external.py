@@ -2,8 +2,6 @@
 Test module for the `dcm_import_module/views/import_external.py`.
 """
 
-from unittest import mock
-from pathlib import Path
 from time import sleep, time
 from uuid import uuid4
 
@@ -12,8 +10,7 @@ from flask import jsonify, request as flask_request, Response
 from dcm_common import LoggingContext as Context
 
 from dcm_import_module import app_factory
-from dcm_import_module.plugins import Interface, OAIPMH
-from dcm_import_module.models import PluginResult, IE, Signature
+from dcm_import_module.plugins import OAIPMHPlugin
 
 
 @pytest.fixture(name="minimal_request_body")
@@ -29,21 +26,35 @@ def _minimal_request_body():
     }
 
 
-def test_import(
+def test_import_full(
     testing_config, minimal_request_body, client, wait_for_report, run_service,
     fake_build_report, fake_builder_service
 ):
-    """Minimal test of /import/external-endpoint with build."""
+    """
+    Test of POST-/import/external-endpoint with build and validation for
+    multiple IEs.
+    """
 
     run_service(
         app=fake_builder_service,
-        port=8083
+        port=8081
+    )
+    run_service(
+        app=fake_builder_service,
+        port=8082
     )
 
     # make request for import
+    minimal_request_body["import"]["args"]["number"] = 2
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            },
+            "objectValidation": {"plugins": {}}
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
     assert response.status_code == 201
@@ -53,13 +64,33 @@ def test_import(
     json = wait_for_report(client, response.json["value"])
 
     assert json["data"]["success"]
-    assert len(json["data"]["IEs"]) == 1
+    assert len(json["data"]["IEs"]) == 2
     assert (
         testing_config().FS_MOUNT_POINT / json["data"]["IEs"]["ie0"]["path"]
     ).is_dir()
-    assert len(json["data"]["IPs"]) == 1
+    assert len(json["data"]["IPs"]) == 2
+    assert len(json["children"]) == 4
+    assert all(
+        id_ in json["children"]
+        for id_ in [
+            "ip0@ip_builder",
+            "ip0@object_validator",
+            "ip1@ip_builder",
+            "ip1@object_validator",
+        ]
+    )
+    assert set(json["data"]["IPs"]["ip0"]["logId"]) == {
+        "ip0@ip_builder",
+        "ip0@object_validator",
+    }
+    assert set(json["data"]["IPs"]["ip1"]["logId"]) == {
+        "ip1@ip_builder",
+        "ip1@object_validator",
+    }
     assert fake_build_report \
-        == json["children"][json["data"]["IPs"]["ip0"]["logId"]]
+        == json["children"][json["data"]["IPs"]["ip0"]["logId"][0]]
+    assert fake_build_report \
+        == json["children"][json["data"]["IPs"]["ip1"]["logId"][0]]
 
 
 def test_import_only_ie(
@@ -80,8 +111,6 @@ def test_import_only_ie(
     assert (
         testing_config().FS_MOUNT_POINT / json["data"]["IEs"]["ie0"]["path"]
     ).is_dir()
-    assert len(json["children"]) == 1
-    assert "0@demo-plugin" in json["children"]
     assert json["data"]["IEs"]["ie0"]["IPIdentifier"] is None
     assert any("Skip building" in msg["body"] for msg in json["log"]["INFO"])
     assert "IPs" not in json["data"]
@@ -106,12 +135,10 @@ def test_import_empty(
     assert any("List of IEs is empty" in msg["body"] for msg in json["log"]["INFO"])
     assert len(json["data"]["IEs"]) == 0
     assert "IPs" not in json["data"]
-    assert len(json["children"]) == 1
-    assert "0@demo-plugin" in json["children"]
 
 
 def test_timeout_of_source_system(
-    testing_config, minimal_request_body, wait_for_report, run_service
+    testing_config, wait_for_report, run_service
 ):
     """Test import behavior when source system times out."""
 
@@ -119,9 +146,8 @@ def test_timeout_of_source_system(
         SOURCE_SYSTEM_TIMEOUT = 0.1
         SOURCE_SYSTEM_TIMEOUT_RETRIES = 1
         SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL = 1
-        SUPPORTED_PLUGINS = {
-            OAIPMH.name: OAIPMH
-        }
+        SUPPORTED_PLUGINS = [OAIPMHPlugin]
+
     client = app_factory(ThisConfig()).test_client()
     run_service(
         routes=[
@@ -141,7 +167,7 @@ def test_timeout_of_source_system(
         "/import/external",
         json={
             "import": {
-                "plugin": OAIPMH.name,
+                "plugin": OAIPMHPlugin.name,
                 "args": {
                     "transfer_url_info": {
                         "regex": "asd"
@@ -150,15 +176,14 @@ def test_timeout_of_source_system(
                     "metadata_prefix": ""
                 }
             },
-            "build": {"configuration": "-"}
         }
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
     json = wait_for_report(client, response.json["value"])
 
     assert not json["data"]["success"]
-    assert Context.ERROR.name in json["children"]["0@oai_pmh-plugin"]["log"]
-    assert "timeout" in str(json["children"]["0@oai_pmh-plugin"]["log"])
+    assert Context.ERROR.name in json["log"]
+    assert "timeout" in str(json["log"])
 
 
 def test_import_no_path(
@@ -172,30 +197,48 @@ def test_import_no_path(
 
     # Remove the path from the fake_build_report
     del fake_build_report["data"]["path"]
-    fake_build_report["data"]["valid"] = False
+    del fake_build_report["data"]["valid"]
+    fake_build_report["data"]["success"] = False
+    fake_build_report["log"] = {
+        "ERROR": [
+            {
+                "datetime": "2024-08-09T12:15:10+00:00",
+                "origin": "IP Builder",
+                "body": "Some error",
+            },
+        ]
+    }
     # Run the IP Builder service
     run_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
             ("/report", lambda: (jsonify(**fake_build_report), 200), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
 
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
     json = wait_for_report(client, response.json["value"])
 
     assert not json["data"]["success"]
+    assert len(json["log"]["ERROR"]) == 2
     assert len(json["data"]["IEs"]) == 1
-    assert len(json["data"]["IPs"]) == 0
-    assert len(json["children"]) == 2
-    assert "ie0@ip_builder" in json["children"]
+    assert len(json["data"]["IPs"]) == 1
+    assert "path" not in json["data"]["IPs"]
+    assert "valid" not in json["data"]["IPs"]["ip0"]
+    assert len(json["children"]) == 1
+    assert "ip0@ip_builder" in json["children"]
 
 
 def test_missing_payload_in_ie(
@@ -209,25 +252,20 @@ def test_missing_payload_in_ie(
 
     run_service(
         app=fake_builder_service,
-        port=8083
+        port=8081
     )
-
-    # fake plugin
-    plugin_patch = mock.patch(
-        "dcm_import_module.plugins.demo_plugin.DemoPlugin.get",
-        return_value=PluginResult(
-            ies={
-                "ie0": IE(Path("."), fetched_payload=False),
-                "ie1": IE(Path("."), fetched_payload=True),
-            }
-        )
-    )
-    plugin_patch.start()
 
     # make request for import
+    minimal_request_body["import"]["args"]["bad_ies"] = True
+    minimal_request_body["import"]["args"]["number"] = 2
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -236,17 +274,16 @@ def test_missing_payload_in_ie(
     assert not json["data"]["success"]
     assert any("Skip building" in msg["body"] for msg in json["log"]["INFO"])
     assert len(json["data"]["IEs"]) == 2
-    assert not json["data"]["IEs"]["ie0"]["fetchedPayload"]
-    assert json["data"]["IEs"]["ie0"]["IPIdentifier"] is None
-    assert json["data"]["IEs"]["ie1"]["fetchedPayload"]
+    assert json["data"]["IEs"]["ie0"]["fetchedPayload"]
+    assert not json["data"]["IEs"]["ie1"]["fetchedPayload"]
+    assert json["data"]["IEs"]["ie0"]["IPIdentifier"] == "ip0"
     assert json["data"]["IEs"]["ie1"]["IPIdentifier"] == "ip1"
-    assert len(json["data"]["IPs"]) == 1
-    assert len(json["children"]) == 2
-    assert "0@demo-plugin" in json["children"]
-    assert "ie1@ip_builder" in json["children"]
+    assert len(json["data"]["IPs"]) == 2
+    assert len(json["children"]) == 1
+    assert "ip0@ip_builder" in json["children"]
+    assert json["data"]["IPs"]["ip0"]["IEIdentifier"] == "ie0"
+    assert "valid" not in json["data"]["IPs"]["ip1"]
     assert json["data"]["IPs"]["ip1"]["IEIdentifier"] == "ie1"
-
-    plugin_patch.stop()
 
 
 @pytest.mark.parametrize(
@@ -269,21 +306,26 @@ def test_processing_of_invalid_ip(
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
             ("/report", lambda: (jsonify(**fake_build_report), 200), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
     json = wait_for_report(client, response.json["value"])
 
-    assert json["data"]["success"] == valid
+    assert json["data"]["success"] is valid
+    assert json["data"]["IPs"]["ip0"]["valid"] is valid
     assert len(json["data"]["IEs"]) == 1
     assert len(json["data"]["IPs"]) == 1
-    assert json["data"]["IPs"]["ip0"]["valid"] == valid
 
 
 def test_arg_forwarding_to_ip_builder(
@@ -291,8 +333,8 @@ def test_arg_forwarding_to_ip_builder(
     run_service, fake_build_report
 ):
     """
-    Test whether arguments in "build" and "validation" are forwarded to
-    builder service correctly.
+    Test whether arguments in "build" are forwarded to builder service
+    correctly.
     """
 
     def post():
@@ -303,13 +345,10 @@ def test_arg_forwarding_to_ip_builder(
             ("/build", post, ["POST"]),
             ("/report", lambda: (jsonify(**fake_build_report), 200), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
     # make request for import
-    extra_args = {
-        "build": {"key": "value"},
-        "validation": {"another-key": "another-value"}
-    }
+    extra_args = {"build": {"mappingPlugin": {"plugin": "a", "args": {}}}}
     response = client.post(
         "/import/external",
         json=minimal_request_body | extra_args
@@ -318,7 +357,10 @@ def test_arg_forwarding_to_ip_builder(
 
     json = wait_for_report(client, response.json["value"])
 
-    assert "ie0@ip_builder" not in json["children"]
+    assert (
+        json["children"]["ip0@ip_builder"]["args"]["build"]["mappingPlugin"]
+        == extra_args["build"]["mappingPlugin"]
+    )
 
 
 def test_no_connection_to_ip_builder(
@@ -330,7 +372,12 @@ def test_no_connection_to_ip_builder(
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -338,9 +385,14 @@ def test_no_connection_to_ip_builder(
 
     assert not json["data"]["success"]
     assert len(json["log"]["ERROR"]) == 2
-    assert any("unavailable" in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("did not build" in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("ie0" in msg["body"] for msg in json["log"]["ERROR"])
+    assert any(
+        "Cannot connect to service at" in msg["body"]
+        for msg in json["log"]["ERROR"]
+    )
+    assert any(
+        "Failed to build" in msg["body"] and "ie0" in msg["body"]
+        for msg in json["log"]["ERROR"]
+    )
 
 
 def test_rejection_by_ip_builder(
@@ -356,12 +408,17 @@ def test_rejection_by_ip_builder(
         routes=[
             ("/build", lambda: Response(rejection_msg, status=rejection_status), ["POST"]),
         ],
-        port=8083
+        port=8081
     )
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -371,11 +428,12 @@ def test_rejection_by_ip_builder(
     assert len(json["log"]["ERROR"]) == 2
     assert any(rejection_msg in msg["body"] for msg in json["log"]["ERROR"])
     assert any(str(rejection_status) in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("did not build" in msg["body"] for msg in json["log"]["ERROR"])
+    assert any("Failed to build" in msg["body"] for msg in json["log"]["ERROR"])
 
 
 def test_timeout_of_ip_builder(
-    testing_config, minimal_request_body, wait_for_report, run_service
+    testing_config, minimal_request_body, wait_for_report, run_service,
+    fake_build_report
 ):
     """Test import behavior when builder times out."""
 
@@ -385,14 +443,19 @@ def test_timeout_of_ip_builder(
     run_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
-            ("/report", lambda: Response("No", 503), ["GET"]),
+            ("/report", lambda: (jsonify(fake_build_report), 503), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -400,8 +463,10 @@ def test_timeout_of_ip_builder(
 
     assert not json["data"]["success"]
     assert len(json["log"]["ERROR"]) == 2
-    assert any("Builder timed out" in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("did not build" in msg["body"] for msg in json["log"]["ERROR"])
+    assert any("has timed out" in msg["body"] for msg in json["log"]["ERROR"])
+    assert any(
+        "Failed to build" in msg["body"] for msg in json["log"]["ERROR"]
+    )
 
 
 def test_unknown_report_from_ip_builder(
@@ -414,12 +479,17 @@ def test_unknown_report_from_ip_builder(
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
             ("/report", lambda: Response("What?", 404), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
     # make request for import
     response = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -427,10 +497,12 @@ def test_unknown_report_from_ip_builder(
 
     assert not json["data"]["success"]
     assert len(json["log"]["ERROR"]) == 2
-    assert any("Builder returned with" in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("404" in msg["body"] for msg in json["log"]["ERROR"])
-    assert any("did not build" in msg["body"] for msg in json["log"]["ERROR"])
-
+    assert any(
+        "responded with an unknown error" in msg["body"]
+        and "What?" in msg["body"]
+        and "404" in msg["body"]
+        for msg in json["log"]["ERROR"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -452,7 +524,7 @@ def test_unknown_report_from_ip_builder(
             ["build"], 0, 422
         ),
         (
-            ["validation"], 0, 422
+            ["objectValidation"], 0, 422
         ),
         (
             ["callbackUrl"], "no-url", 422
@@ -490,62 +562,6 @@ def test_import_handlers(
     assert response.status_code == expected_status
 
 
-def test_import_plugin_progress(testing_config, client):
-    """Test availability of plugin-progress during import."""
-    duration = 0.01
-
-    class TestPlugin(Interface):
-        """Fake plugin"""
-        _NAME = "test"
-        _DESCRIPTION = "Test Plugin"
-        _DEPENDENCIES = []
-        _SIGNATURE = Signature()
-
-        def get(self, **kwargs) -> PluginResult:
-            result = PluginResult()
-            for i in range(20):
-                sleep(duration)
-                self.set_progress(numeric=i)
-            return result
-
-    class Config(testing_config):
-        SUPPORTED_PLUGINS = {TestPlugin.name: TestPlugin}
-
-    client = app_factory(Config()).test_client()
-    # make request for import
-    response = client.post(
-        "/import/external",
-        json={"import": {"plugin": TestPlugin.name, "args": {}}}
-    )
-    assert client.put("/orchestration?until-idle", json={}).status_code == 200
-
-    token = response.json["value"]
-
-    # wait for report to contain plugin-child
-    max_sleep = 250
-    c_sleep = 0
-    while c_sleep < max_sleep:
-        sleep(2*duration)
-        response = client.get(
-            f"/report?token={token}"
-        )
-        if "children" in response.json and len(response.json["children"]) > 0:
-            break
-        c_sleep = c_sleep + 1
-
-    assert "children" in response.json
-
-    # check for increasing numeric progress
-    sleep(2*duration)
-    response = client.get(f"/report?token={token}")
-    value1 = response.json["children"]["0@test-plugin"]["progress"]["numeric"]
-    sleep(2*duration)
-    response = client.get(f"/report?token={token}")
-    value2 = response.json["children"]["0@test-plugin"]["progress"]["numeric"]
-    print(f"progress: {value2} > progress: {value1}")
-    assert value2 > value1
-
-
 def test_import_abort(
     minimal_request_body, client, run_service, file_storage
 ):
@@ -574,13 +590,18 @@ def test_import_abort(
             ("/build", external_abort, ["DELETE"]),
             ("/report", external_report, ["GET"]),
         ],
-        port=8083
+        port=8081
     )
 
     # make request for import
     token = client.post(
         "/import/external",
-        json=minimal_request_body | {"build": {"configuration": "-"}}
+        json=minimal_request_body
+        | {
+            "build": {
+                "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+            }
+        },
     ).json["value"]
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 
@@ -600,5 +621,5 @@ def test_import_abort(
     assert report["progress"]["status"] == "aborted"
     assert "Received SIGKILL" in str(report["log"])
     assert "Aborting child" in str(report["log"])
-    assert "ie0@ip_builder" in report["children"]
-    assert report["children"]["ie0@ip_builder"] == {"intermediate": "data"}
+    assert "ip0@ip_builder" in report["children"]
+    assert report["children"]["ip0@ip_builder"] == {"intermediate": "data"}

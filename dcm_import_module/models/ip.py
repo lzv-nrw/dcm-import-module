@@ -22,15 +22,15 @@ class IP(DataModel):
     ie_identifier -- reference to IE from which this IP has been built
                      (valid only in Report.data-context)
                      (default None)
-    log_id -- identifier referring to related report as listed in a
-              'children'-block of a `Report`
+    log_id -- list of identifiers referring to related reports as listed
+              in a 'children'-block of a `Report`
               (default None)
     """
 
     path: Optional[Path] = None
     valid: Optional[bool] = None
     ie_identifier: Optional[str] = None
-    log_id: Optional[str] = None
+    log_id: Optional[list[str]] = None
 
     @DataModel.serialization_handler("path")
     @classmethod

@@ -61,22 +61,24 @@ def test_import_minimal(minimal_request_body, client, wait_for_report):
     )
 
 
-def test_import_with_validation(
+def test_import_with_spec_validation(
     minimal_request_body, fake_builder_service, fake_validation_report,
     client, wait_for_report, run_service
 ):
-    """Test of /import/internal-endpoint with validation."""
+    """Test of /import/internal-endpoint with spec-validation."""
 
     run_service(
         app=fake_builder_service,
-        port=8083
+        port=8081
     )
 
     # make request for import
     response = client.post(
         "/import/internal",
         json=minimal_request_body | {
-            "validation": {"modules": ["bagit_profile"]}
+            "specificationValidation": {
+                "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+            }
         }
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
@@ -85,12 +87,43 @@ def test_import_with_validation(
     assert json["data"]["success"]
     assert json["data"]["IPs"]["ip0"]["valid"]
     assert json["data"]["IPs"]["ip0"]["logId"] is not None
-    assert json["data"]["IPs"]["ip0"]["logId"] in json["children"]
+    assert all(
+        log_id in json["children"]
+        for log_id in json["data"]["IPs"]["ip0"]["logId"]
+    )
     assert len(json["children"]) == 1
     assert (
-        json["children"][json["data"]["IPs"]["ip0"]["logId"]]
+        json["children"][json["data"]["IPs"]["ip0"]["logId"][0]]
         == fake_validation_report
     )
+
+
+def test_import_with_obj_validation(
+    minimal_request_body, fake_builder_service, client, wait_for_report,
+    run_service
+):
+    """Test of /import/internal-endpoint with object-validation."""
+
+    run_service(
+        app=fake_builder_service,
+        port=8082
+    )
+
+    # make request for import
+    response = client.post(
+        "/import/internal",
+        json=minimal_request_body | {
+            "objectValidation": {
+                "plugins": {},
+            }
+        }
+    )
+    assert client.put("/orchestration?until-idle", json={}).status_code == 200
+    json = wait_for_report(client, response.json["value"])
+
+    assert json["data"]["success"]
+    assert json["data"]["IPs"]["ip0"]["valid"]
+    assert len(json["children"]) == 1
 
 
 def test_import_with_validation_fail(
@@ -101,14 +134,16 @@ def test_import_with_validation_fail(
 
     run_service(
         app=fake_builder_service_fail,
-        port=8083
+        port=8081
     )
 
     # make request for import
     response = client.post(
         "/import/internal",
         json=minimal_request_body | {
-            "validation": {"modules": ["bagit_profile"]}
+            "specificationValidation": {
+                "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+            }
         }
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
@@ -178,10 +213,10 @@ def test_import_builder_timeout(
 
     run_service(
         routes=[
-            ("/validate/ip", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
+            ("/validate", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
             ("/report", lambda: (jsonify({"host": "", "progress": {}}), 503), ["GET"]),
         ],
-        port=8083
+        port=8081
     )
 
     testing_config.IP_BUILDER_JOB_TIMEOUT = 0.001
@@ -191,7 +226,9 @@ def test_import_builder_timeout(
     response = client.post(
         "/import/internal",
         json=minimal_request_body | {
-            "validation": {"modules": ["bagit_profile"]}
+            "specificationValidation": {
+                "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+            }
         }
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
@@ -211,7 +248,9 @@ def test_import_builder_unavailable(
     response = client.post(
         "/import/internal",
         json=minimal_request_body | {
-            "validation": {"modules": ["bagit_profile"]}
+            "specificationValidation": {
+                "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+            }
         }
     )
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
@@ -288,17 +327,21 @@ def test_import_abort(
     # setup fake object validator
     run_service(
         routes=[
-            ("/validate/ip", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
+            ("/validate", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
             ("/validate", external_abort, ["DELETE"]),
             ("/report", external_report, ["GET"]),
         ],
-        port=8083
+        port=8081
     )
 
     # make request for import
     token = client.post(
         "/import/internal",
-        json=minimal_request_body | {"validation": {"modules": ["module1"]}}
+        json=minimal_request_body | {
+            "specificationValidation": {
+                "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+            }
+        }
     ).json["value"]
     assert client.put("/orchestration?until-idle", json={}).status_code == 200
 

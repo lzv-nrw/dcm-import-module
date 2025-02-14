@@ -13,5 +13,6 @@ test_ip_json = get_model_serialization_test(
     IP, (
         ((), {}),
         ((Path("ip_path"),), {}),
+        ((Path("ip_path"),), {"log_id": ["id0", "id1"]}),
     )
 )

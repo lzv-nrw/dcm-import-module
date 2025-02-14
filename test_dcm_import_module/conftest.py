@@ -30,10 +30,7 @@ def _testing_config(file_storage):
     class TestingConfig(config.AppConfig):
         TESTING = True
         FS_MOUNT_POINT = file_storage
-        SUPPORTED_PLUGINS = {
-            DemoPlugin.name: DemoPlugin,
-        }
-        IP_BUILDER_HOST = "http://localhost:8083"
+        SUPPORTED_PLUGINS = [DemoPlugin]
         ORCHESTRATION_AT_STARTUP = False
         ORCHESTRATION_DAEMON_INTERVAL = 0.001
         ORCHESTRATION_ORCHESTRATOR_INTERVAL = 0.001
@@ -52,8 +49,8 @@ def _client(testing_config):
     return app_factory(testing_config()).test_client()
 
 
-@pytest.fixture(name="minimal_request_body")
-def _minimal_request_body():
+@pytest.fixture(name="minimal_request_body_external")
+def _minimal_request_body_external():
     return {
         "import": {
             "plugin": "demo",
@@ -63,7 +60,25 @@ def _minimal_request_body():
             },
         },
         "build": {
-            "configuration": "-",
+            "mappingPlugin": {"plugin": "oai-mapper", "args": {}},
+        },
+        "objectValidation": {
+            "plugins": {},
+        }
+    }
+
+
+@pytest.fixture(name="minimal_request_body_internal")
+def _minimal_request_body_internal():
+    return {
+        "import": {
+            "target": {"path": "path/to/ips"},
+        },
+        "specificationValidation": {
+            "BagItProfile": "bagit_profiles/dcm_bagit_profile_v1.0.0.json",
+        },
+        "objectValidation": {
+            "plugins": {},
         }
     }
 
@@ -71,7 +86,7 @@ def _minimal_request_body():
 @pytest.fixture(name="fake_build_report")
 def _fake_build_report():
     return {
-        "host": "http://localhost:8082",
+        "host": "http://localhost:8081",
         "token": {
             "value": "abcdef",
             "expires": True,
@@ -81,11 +96,12 @@ def _fake_build_report():
         "progress": {"status": "completed", "verbose": "Done", "numeric": 100},
         "log": {},
         "data": {
-            "valid": True,
+            "build_plugin": "bagit-bag-builder",
             "path": "ip/abcde-12345-fghijk-67890",
-            "logId": []
-        },
-        "children": {}
+            "valid": True,
+            "success": True,
+            "details": {},
+        }
     }
 
 
@@ -103,14 +119,15 @@ def _fake_validation_report():
         "log": {},
         "data": {
             "valid": True,
+            "success": True,
             "details": {
                 "bagit_profile": {
                     "valid": True,
+                    "success": True,
                     "log": {}
                 }
             }
-        },
-        "children": {}
+        }
     }
 
 
@@ -134,7 +151,7 @@ def _fake_builder_service(
     return external_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
-            ("/validate/ip", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
+            ("/validate", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
             (
                 "/report",
                 lambda:
@@ -154,7 +171,7 @@ def _fake_builder_service_fail(
     return external_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
-            ("/validate/ip", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
+            ("/validate", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
             (
                 "/report",
                 lambda:

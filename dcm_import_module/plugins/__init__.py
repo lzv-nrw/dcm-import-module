@@ -1,9 +1,15 @@
-from dcm_import_module.plugins.interface import Interface
-from dcm_import_module.plugins.oai_pmh import OAIPMH
-from dcm_import_module.plugins.demo_plugin import DemoPlugin
+from dcm_import_module.plugins.interface import (
+    IEImportPlugin,
+    IEImportResult,
+    IEImportContext,
+)
+from dcm_import_module.plugins.oai_pmh import OAIPMHPlugin
+from dcm_import_module.plugins.demo import DemoPlugin
 
 __all__ = [
-    "Interface",
-    "OAIPMH",
-    "DemoPlugin"
+    "IEImportPlugin",
+    "IEImportResult",
+    "IEImportContext",
+    "OAIPMHPlugin",
+    "DemoPlugin",
 ]

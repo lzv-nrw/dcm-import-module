@@ -1,45 +1,42 @@
 """Input handlers for the 'DCM Import Module'-app."""
 
+from typing import Mapping
 from pathlib import Path
 
-from dcm_common.services import TargetPath
+from dcm_common.services import handlers, TargetPath
 from data_plumber_http import Property, Object, String, Url, Boolean
 
-from dcm_import_module.models.import_config import (
-    ImportConfigExternal, Target, ImportConfigInternal
-)
+from dcm_import_module.plugins import IEImportPlugin
+from dcm_import_module.models.import_config import Target, ImportConfigInternal
 
 
 report_handler = Object(
-    properties={
-        Property("token", required=True): String()
-    },
-    accept_only=["token"]
+    properties={Property("token", required=True): String()},
+    accept_only=["token"],
 ).assemble()
 
 
-def get_external_import_handler(plugins: list[str]):
+def get_external_import_handler(acceptable_plugins: Mapping[str, IEImportPlugin]):
     """
     Returns parameterized handler (based on allowed plugins)
     """
     return Object(
         properties={
-            Property("import", name="import_", required=True): Object(
-                model=ImportConfigExternal,
-                properties={
-                    Property("plugin", required=True): String(enum=plugins),
-                    Property("args", required=True): Object(free_form=True),
-                },
-                accept_only=[
-                    "plugin", "args",
-                ]
+            Property(
+                "import", name="import_", required=True
+            ): handlers.PluginType(
+                acceptable_plugins,
+                acceptable_context=["import"],
             ),
-            Property("validation"): Object(free_form=True),
+            Property("objectValidation", name="obj_validation"): Object(
+                free_form=True
+            ),
             Property("build"): Object(free_form=True),
-            Property("callbackUrl", name="callback_url"):
-                Url(schemes=["http", "https"])
+            Property("callbackUrl", name="callback_url"): Url(
+                schemes=["http", "https"]
+            ),
         },
-        accept_only=["import", "build", "validation", "callbackUrl"]
+        accept_only=["import", "build", "objectValidation", "callbackUrl"],
     ).assemble()
 
 
@@ -55,22 +52,33 @@ def get_internal_import_handler(cwd: Path):
                     Property("target", required=True): Object(
                         model=Target,
                         properties={
-                            Property("path", required=True):
-                                TargetPath(
-                                    _relative_to=cwd, cwd=cwd, is_dir=True
-                                )
+                            Property("path", required=True): TargetPath(
+                                _relative_to=cwd, cwd=cwd, is_dir=True
+                            )
                         },
-                        accept_only=["path"]
+                        accept_only=["path"],
                     ),
-                    Property("batch", default=True): Boolean()
+                    Property("batch", default=True): Boolean(),
                 },
                 accept_only=[
-                    "target", "batch",
-                ]
+                    "target",
+                    "batch",
+                ],
             ),
-            Property("validation"): Object(free_form=True),
-            Property("callbackUrl", name="callback_url"):
-                Url(schemes=["http", "https"])
+            Property(
+                "specificationValidation", name="spec_validation"
+            ): Object(free_form=True),
+            Property("objectValidation", name="obj_validation"): Object(
+                free_form=True
+            ),
+            Property("callbackUrl", name="callback_url"): Url(
+                schemes=["http", "https"]
+            ),
         },
-        accept_only=["import", "validation", "callbackUrl"]
+        accept_only=[
+            "import",
+            "specificationValidation",
+            "objectValidation",
+            "callbackUrl",
+        ],
     ).assemble()

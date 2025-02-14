@@ -1,5 +1,20 @@
 # Changelog
 
+## [X.Y.Z] - 2025-??-??
+
+### Changed
+
+- refactored to use plugin system from `dcm-common`
+- **Breaking:** migrated to Object Validator API v5
+- **Breaking:** migrated to IP Builder API v4
+- **Breaking:** migrated to Import Module API v6
+
+### Added
+
+### Removed
+
+### Fixed
+
 ## [3.0.2] - 2024-11-28
 
 ### Fixed

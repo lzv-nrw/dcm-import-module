@@ -8,7 +8,7 @@ import yaml
 from dcm_common.services import FSConfig, OrchestratedAppConfig
 import dcm_import_module_api
 
-from dcm_import_module.plugins import OAIPMH, DemoPlugin
+from dcm_import_module.plugins import OAIPMHPlugin, DemoPlugin
 
 
 class AppConfig(FSConfig, OrchestratedAppConfig):
@@ -22,21 +22,24 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
     SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL = \
         int(os.environ.get("SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL") or 360)
     # determine if test-plugin should available
-    USE_TEST_PLUGIN = (int(os.environ.get("USE_TEST_PLUGIN") or 0)) == 1
+    USE_DEMO_PLUGIN = (int(os.environ.get("USE_DEMO_PLUGIN") or 0)) == 1
     # output directory for ie-extraction (relative to FS_MOUNT_POINT)
     IE_OUTPUT = Path(os.environ.get("IE_OUTPUT") or "ie/")
     # available plugins
-    SUPPORTED_PLUGINS = {
-        OAIPMH.name: OAIPMH,
-    } | (
-        {DemoPlugin.name: DemoPlugin}
-        if USE_TEST_PLUGIN else {}
+    SUPPORTED_PLUGINS = [OAIPMHPlugin] + (
+            [DemoPlugin] if USE_DEMO_PLUGIN else []
     )
+
     # ------ CALL IP BUILDER ------
     IP_BUILDER_HOST = \
-        os.environ.get("IP_BUILDER_HOST") or "http://localhost:8083"
+        os.environ.get("IP_BUILDER_HOST") or "http://localhost:8081"
     IP_BUILDER_JOB_TIMEOUT = \
         int(os.environ.get("IP_BUILDER_JOB_TIMEOUT") or "3600")
+    # ------ CALL OBJECT VALIDATOR ------
+    OBJECT_VALIDATOR_HOST = \
+        os.environ.get("OBJECT_VALIDATOR_HOST") or "http://localhost:8082"
+    OBJECT_VALIDATOR_JOB_TIMEOUT = \
+        int(os.environ.get("OBJECT_VALIDATOR_JOB_TIMEOUT") or "3600")
 
     # ------ API ------
     API_DOCUMENT = Path(dcm_import_module_api.__file__).parent / "openapi.yaml"
@@ -44,6 +47,17 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         API_DOCUMENT.read_text(encoding="utf-8"),
         Loader=yaml.SafeLoader
     )
+
+    def __init__(self, **kwargs) -> None:
+        self.supported_plugins = {}
+        for Plugin in self.SUPPORTED_PLUGINS:
+            self.supported_plugins[Plugin.name] = Plugin(
+                self.IE_OUTPUT,
+                timeout=self.SOURCE_SYSTEM_TIMEOUT,
+                max_retries=self.SOURCE_SYSTEM_TIMEOUT_RETRIES,
+            )
+
+        super().__init__(**kwargs)
 
     def set_identity(self) -> None:
         super().set_identity()
@@ -80,14 +94,11 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         }
         # - plugins
         self.CONTAINER_SELF_DESCRIPTION["configuration"]["plugins"] = {
-            plugin.name: {
-                "name": plugin.name,
-                "description": plugin.description,
-                "signature": plugin.signature,
-                "dependencies": plugin.dependencies_version,
-            } for plugin in self.SUPPORTED_PLUGINS.values()
+            plugin.name: plugin.json
+            for plugin in self.supported_plugins.values()
         }
         # - services
         self.CONTAINER_SELF_DESCRIPTION["configuration"]["services"] = {
-            "IP Builder": self.IP_BUILDER_HOST
+            "ip_builder": self.IP_BUILDER_HOST,
+            "object_validator": self.OBJECT_VALIDATOR_HOST,
         }

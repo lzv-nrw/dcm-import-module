@@ -12,7 +12,7 @@ from dcm_import_module import handlers
 @pytest.fixture(name="external_import_handler")
 def _external_import_handler(testing_config):
     return handlers.get_external_import_handler(
-        list(testing_config().SUPPORTED_PLUGINS.keys())
+        testing_config().supported_plugins
     )
 
 
@@ -25,18 +25,31 @@ def _internal_import_handler(testing_config):
 
 @pytest.mark.parametrize(
     ("json", "status"),
-    (pytest_args := [
-        ({"no-import": None}, 400),
-        ({"import": None}, 422),
-        ({"import": {}}, 400),
-        ({"import": {"unknown": None}}, 400),
-        ({"import": {"plugin": None}}, 422),
-        ({"import": {"plugin": None, "args": None}}, 422),
-        ({"import": {"unknown": None, "plugin": None, "args": None}}, 400),
-        ({"import": {"plugin": "demo", "args": None}}, 422),
-        ({"import": {"plugin": "demo", "args": {}}}, Responses.GOOD.status),
-    ]),
-    ids=[f"stage {i+1}" for i in range(len(pytest_args))]
+    (
+        pytest_args := [
+            ({"no-import": None}, 400),
+            ({"import": None}, 422),
+            ({"import": {}}, 400),
+            ({"import": {"unknown": None}}, 400),
+            ({"import": {"plugin": None}}, 422),
+            ({"import": {"plugin": None, "args": None}}, 422),
+            ({"import": {"unknown": None, "plugin": None, "args": None}}, 400),
+            ({"import": {"plugin": "demo", "args": None}}, 422),
+            (
+                {"import": {"plugin": "demo", "args": {}}},
+                Responses.GOOD.status,
+            ),
+            (
+                {
+                    "import": {"plugin": "demo", "args": {}},
+                    "build": {"anything": None},
+                    "objectValidation": {"anything": None},
+                },
+                Responses.GOOD.status,
+            ),
+        ]
+    ),
+    ids=[f"stage {i+1}" for i in range(len(pytest_args))],
 )
 def test_external_import_handler(external_import_handler, json, status):
     """Test external_import_handler."""
@@ -53,18 +66,28 @@ def test_external_import_handler(external_import_handler, json, status):
 
 @pytest.mark.parametrize(
     ("json", "status"),
-    (pytest_args := [
-        ({"no-import": None}, 400),
-        ({"import": None}, 422),
-        ({"import": {}}, 400),
-        ({"import": {"unknown": None}}, 400),
-        ({"import": {"target": None}}, 422),
-        ({"import": {"target": {"unknown": None}}}, 400),
-        ({"import": {"target": {"path": None}}}, 422),
-        ({"import": {"target": {"path": "does-not-exist"}}}, 404),
-        ({"import": {"target": {"path": "."}}}, Responses.GOOD.status),
-    ]),
-    ids=[f"stage {i+1}" for i in range(len(pytest_args))]
+    (
+        pytest_args := [
+            ({"no-import": None}, 400),
+            ({"import": None}, 422),
+            ({"import": {}}, 400),
+            ({"import": {"unknown": None}}, 400),
+            ({"import": {"target": None}}, 422),
+            ({"import": {"target": {"unknown": None}}}, 400),
+            ({"import": {"target": {"path": None}}}, 422),
+            ({"import": {"target": {"path": "does-not-exist"}}}, 404),
+            ({"import": {"target": {"path": "."}}}, Responses.GOOD.status),
+            (
+                {
+                    "import": {"target": {"path": "."}},
+                    "specificationValidation": {"anything": None},
+                    "objectValidation": {"anything": None},
+                },
+                Responses.GOOD.status,
+            ),
+        ]
+    ),
+    ids=[f"stage {i+1}" for i in range(len(pytest_args))],
 )
 def test_internal_import_handler(internal_import_handler, json, status):
     """Test internal_import_handler."""

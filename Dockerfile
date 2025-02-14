@@ -1,23 +1,30 @@
 FROM python:3.10-alpine
 
-# copy entire directory into container
-COPY . /app/dcm-import-module
-# copy accessories
-COPY ./app.py /app/app.py
+# setup for all users
+RUN umask 022
 
 # set working directory
 WORKDIR /app
 
-# install/configure app ..
+# copy entire directory into container
+COPY . /app/dcm-import-module
+# move AppConfig
+RUN mv /app/dcm-import-module/app.py /app/app.py
+
+# install app package
 RUN pip install --upgrade \
     --extra-index-url https://zivgitlab.uni-muenster.de/api/v4/projects/9020/packages/pypi/simple \
-    "dcm-import-module/[cors]"
+    "/app/dcm-import-module/[cors]"
 RUN rm -r dcm-import-module/
-ENV ALLOW_CORS=1
 
-# .. and wsgi server (gunicorn)
+# install wsgi server
 RUN pip install gunicorn
 
+# add and set default user
+RUN adduser -u 303 -S dcm -G users
+RUN mkdir -p /file_storage && chown -R dcm:users /file_storage && chmod -R +w /file_storage
+USER dcm
+
 # define startup
-ENTRYPOINT [ "gunicorn" ]
-CMD ["--bind", "0.0.0.0:8080", "app:app"]
+ENV WEB_CONCURRENCY=5
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:80 --workers 1 --threads ${WEB_CONCURRENCY} app:app"]

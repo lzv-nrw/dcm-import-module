@@ -10,21 +10,15 @@ import pytest
 from oai_pmh_extractor.oaipmh_record import OAIPMHRecord
 from dcm_common import LoggingContext as Context, Logger
 
-from dcm_import_module.plugins import OAIPMH, Interface
-from dcm_import_module.models import IE, PluginResult
-
-
-def test_implements_interface():
-    """Test whether the `OAIPMH`-plugin implements the `Interface`."""
-
-    assert issubclass(OAIPMH, Interface)
+from dcm_import_module.plugins import OAIPMHPlugin, IEImportResult
+from dcm_import_module.models import IE
 
 
 def test__validate_more():
     """Test method `_validate_more` of `OAIPMH`-plugin."""
 
     # bad url
-    valid, msg = OAIPMH("").validate(
+    valid, msg = OAIPMHPlugin("").validate(
         {
             "transfer_url_info": {
                 "xml_path": [],
@@ -35,10 +29,9 @@ def test__validate_more():
         }
     )
     assert not valid
-    assert "import.args" in msg
 
     # good request
-    valid, msg = OAIPMH("").validate(
+    valid, msg = OAIPMHPlugin("").validate(
         {
             "transfer_url_info": {
                 "xml_path": [],
@@ -138,13 +131,14 @@ def test_get_identifiers(
     get_record_patcher.start()
     download_record_payload_patcher.start()
 
-    plugin_result = OAIPMH(file_storage).get(
+    plugin_result = OAIPMHPlugin(file_storage).get(
+        None,
         transfer_url_info=transfer_url_info,
         base_url=oai_url,
         metadata_prefix=""
     )
 
-    assert isinstance(plugin_result, PluginResult)
+    assert isinstance(plugin_result, IEImportResult)
     assert isinstance(plugin_result.log, Logger)
 
     for ie_id, ie in plugin_result.ies.items():
@@ -200,7 +194,8 @@ def test_get_identifiers_deleted_record(
     list_identifiers_patcher.start()
     get_deleted_record_patcher.start()
 
-    plugin_result = OAIPMH(file_storage).get(
+    plugin_result = OAIPMHPlugin(file_storage).get(
+        None,
         transfer_url_info={
             "xml_path": ["metadata", "oai_dc:dc", "dc:identifier"],
             "regex": f"({_oai_url()}.*)"
@@ -209,7 +204,7 @@ def test_get_identifiers_deleted_record(
         metadata_prefix=""
     )
 
-    assert isinstance(plugin_result, PluginResult)
+    assert isinstance(plugin_result, IEImportResult)
     assert isinstance(plugin_result.log, Logger)
 
     assert plugin_result.ies == {}
@@ -252,7 +247,8 @@ def test_get_identifiers_empty_tag(
     list_identifiers_patcher.start()
     get_record_patcher_empty_tag.start()
 
-    plugin_result = OAIPMH(file_storage).get(
+    plugin_result = OAIPMHPlugin(file_storage).get(
+        None,
         transfer_url_info={
             "xml_path": ["OAI-PMH", "GetRecord", "record", "metadata", "oai_dc:dc", "dc:identifier"],
             "regex": f"({_oai_url()}.*)"
@@ -261,7 +257,7 @@ def test_get_identifiers_empty_tag(
         metadata_prefix=""
     )
 
-    assert isinstance(plugin_result, PluginResult)
+    assert isinstance(plugin_result, IEImportResult)
     assert isinstance(plugin_result.log, Logger)
 
     assert len(plugin_result.ies) == 1
@@ -285,11 +281,12 @@ def test_timeout_retry(file_storage, run_service):
         port=8083
     )
 
-    plugin = OAIPMH(
+    plugin = OAIPMHPlugin(
         file_storage, timeout=timeout_duration, max_retries=max_retries
     )
 
     result = plugin.get(
+        None,
         transfer_url_info={
             "regex": ""
         },

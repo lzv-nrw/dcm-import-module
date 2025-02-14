@@ -7,53 +7,37 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify
 from data_plumber_http.decorators import flask_handler, flask_args, flask_json
-from dcm_common import LoggingContext as Context, services
+from dcm_common import LoggingContext as Context, Logger, services
 from dcm_common.orchestration import JobConfig, Job, Children
 from dcm_common.util import list_directory_content
-import dcm_ip_builder_sdk
 
 from dcm_import_module.config import AppConfig
 from dcm_import_module.models import ImportConfigInternal, IP, Report
 from dcm_import_module.handlers import get_internal_import_handler
-
-
-class IPBuilderAdapter(services.ServiceAdapter):
-    """`ServiceAdapter` for the IP Builder service."""
-    _SERVICE_NAME = "IP Builder"
-    _SDK = dcm_ip_builder_sdk
-
-    def _get_api_clients(self):
-        client = self._SDK.ApiClient(self._SDK.Configuration(host=self._url))
-        return self._SDK.DefaultApi(client), self._SDK.ValidationApi(client)
-
-    def _get_api_endpoint(self):
-        return self._api_client.validate_ip
-
-    def _build_request_body(self, base_request_body, target):
-        if target is not None:
-            if "validation" not in base_request_body:
-                base_request_body["validation"] = {}
-            base_request_body["validation"]["target"] = target
-        return base_request_body
-
-    def success(self, info) -> bool:
-        return info.report.get("data", {}).get("valid", False)
+from dcm_import_module.components import (
+    SpecificationValidationAdapter,
+    ObjectValidationAdapter,
+)
 
 
 class InternalImportView(services.OrchestratedView):
     """View-class for ip-import from internal storage."""
+
     NAME = "internal-import"
 
-    def __init__(
-        self, config: AppConfig, *args, **kwargs
-    ) -> None:
+    def __init__(self, config: AppConfig, *args, **kwargs) -> None:
         super().__init__(config, *args, **kwargs)
 
-        # ip-builder adapter
-        self.ip_builder_adapter = IPBuilderAdapter(
+        # initialize adapters
+        self.spec_validation_adapter = SpecificationValidationAdapter(
             self.config.IP_BUILDER_HOST,
             interval=0.25,
-            timeout=self.config.IP_BUILDER_JOB_TIMEOUT
+            timeout=self.config.IP_BUILDER_JOB_TIMEOUT,
+        )
+        self.obj_validation_adapter = ObjectValidationAdapter(
+            self.config.OBJECT_VALIDATOR_HOST,
+            interval=0.25,
+            timeout=self.config.OBJECT_VALIDATOR_JOB_TIMEOUT,
         )
 
     def configure_bp(self, bp: Blueprint, *args, **kwargs) -> None:
@@ -68,18 +52,20 @@ class InternalImportView(services.OrchestratedView):
         )
         def import_internal(
             import_: ImportConfigInternal,
-            validation: Optional[dict] = None,
-            callback_url: Optional[str] = None
+            spec_validation: Optional[dict] = None,
+            obj_validation: Optional[dict] = None,
+            callback_url: Optional[str] = None,
         ):
             """Handle request for import from internal storage."""
             token = self.orchestrator.submit(
                 JobConfig(
                     request_body={
                         "import": import_.json,
-                        "validation": validation,
-                        "callback_url": callback_url
+                        "spec_validation": spec_validation,
+                        "obj_validation": obj_validation,
+                        "callback_url": callback_url,
                     },
-                    context=self.NAME
+                    context=self.NAME,
                 )
             )
             return jsonify(token.json), 201
@@ -89,11 +75,14 @@ class InternalImportView(services.OrchestratedView):
     def get_job(self, config: JobConfig) -> Job:
         return Job(
             cmd=lambda push, data, children: self.import_internal(
-                push, data, children,
+                push,
+                data,
+                children,
                 import_config=ImportConfigInternal.from_json(
                     config.request_body["import"]
                 ),
-                validation_config=config.request_body.get("validation"),
+                spec_validation=config.request_body.get("spec_validation"),
+                obj_validation=config.request_body.get("obj_validation"),
             ),
             hooks={
                 "startup": services.default_startup_hook,
@@ -102,9 +91,9 @@ class InternalImportView(services.OrchestratedView):
                 "abort": services.default_abort_hook,
                 "completion": services.termination_callback_hook_factory(
                     config.request_body.get("callback_url", None),
-                )
+                ),
             },
-            name="Import Module"
+            name="Import Module",
         )
 
     @staticmethod
@@ -115,10 +104,14 @@ class InternalImportView(services.OrchestratedView):
         return (path / "bagit.txt").is_file() and (path / "data").is_dir()
 
     def import_internal(
-        self, push, report: Report, children: Children,
+        self,
+        push,
+        report: Report,
+        children: Children,
         import_config: ImportConfigInternal,
-        validation_config: Optional[dict]
-    ):
+        spec_validation: Optional[dict],
+        obj_validation: Optional[dict],
+    ) -> None:
         """
         Job instructions for the '/import/internal' endpoint.
 
@@ -131,14 +124,16 @@ class InternalImportView(services.OrchestratedView):
 
         Keyword arguments:
         import_config -- an `ImportConfigInternal`-object
-        validation_config - jsonable dictionary to be forwarded to the IP
-                            Builder
+        spec_validation - jsonable dictionary to be forwarded to the IP
+                          Builder
+        obj_validation - jsonable dictionary to be forwarded to the
+                         Object Validator
         """
 
         if import_config.batch:
             report.log.log(
                 Context.INFO,
-                body=f"Collecting IPs from '{import_config.target.path}'."
+                body=f"Collecting IPs from '{import_config.target.path}'.",
             )
             progress_verbose_base_msg = (
                 f"collecting IPs from '{import_config.target.path}'"
@@ -146,7 +141,7 @@ class InternalImportView(services.OrchestratedView):
         else:
             report.log.log(
                 Context.INFO,
-                body=f"Collecting IP at '{import_config.target.path}'."
+                body=f"Collecting IP at '{import_config.target.path}'.",
             )
             progress_verbose_base_msg = (
                 f"collecting IP at '{import_config.target.path}'"
@@ -158,7 +153,7 @@ class InternalImportView(services.OrchestratedView):
         if import_config.batch:
             potential_ips = list_directory_content(
                 import_config.target.path,
-                condition_function=lambda p: p.is_dir()
+                condition_function=lambda p: p.is_dir(),
             )
         else:
             potential_ips = [import_config.target.path]
@@ -171,69 +166,118 @@ class InternalImportView(services.OrchestratedView):
             if not self._is_ip(ip):
                 report.log.log(
                     Context.WARNING,
-                    body=f"Skipping directory '{ip}': Implausible target."
+                    body=f"Skipping directory '{ip}': Implausible target.",
                 )
                 push()
                 continue
             report.data.ips[ip.name] = IP(ip)
 
-        if validation_config is None:
+        # perform validation if requested
+        if spec_validation is None and obj_validation is None:
             report.data.success = True
             report.log.log(
                 Context.INFO,
                 body="Skip validating IPs (request does not contain "
-                + "validation-information)."
+                + "validation-information).",
             )
             push()
             return
 
-        report.children = {}
+        self._validate(push, report, children, spec_validation, obj_validation)
+
+    def _validate(
+        self,
+        push,
+        report: Report,
+        children: Children,
+        spec_validation: Optional[dict],
+        obj_validation: Optional[dict],
+    ) -> None:
+        """
+        Helper function for running validation during internal import.
+
+        Orchestration standard-arguments:
+        push -- (orchestration-standard) push `data` to host process
+        report -- (orchestration-standard) common data-object shared via
+                  `push`
+        children -- (orchestration-standard) `ChildJob`-registry shared
+                    via `push`
+
+        Keyword arguments:
+        spec_validation - jsonable dictionary to be forwarded to the IP
+                          Builder
+        obj_validation - jsonable dictionary to be forwarded to the
+                         Object Validator
+        """
+
+        if report.children is None:
+            report.children = {}
+
         errors = 0
         for ip_id, ip in report.data.ips.items():
-            report.progress.verbose = (
-                f"awaiting validation result for '{ip.path}'"
-            )
-            ip.log_id = f"{ip_id}@ip_builder"
-            report.children[ip.log_id] = {}
-            push()
-            self.ip_builder_adapter.run(
-                base_request_body=validation_config,
-                target={"path": str(ip.path)},
-                info=(
-                    info := services.APIResult(
-                        report=report.children[ip.log_id]
-                    )
+            validation_results = []
+            for name, adapter, inner_request_body in [
+                ("ip_builder", self.spec_validation_adapter, spec_validation),
+                (
+                    "object_validator",
+                    self.obj_validation_adapter,
+                    obj_validation,
                 ),
-                post_submission_hooks=(
-                    # link to children
-                    children.link_ex(
-                        url=self.config.IP_BUILDER_HOST,
-                        abort_path="/validate",
-                        tag=ip_id,
-                        child_id=ip.log_id,
-                        post_link_hook=push
-                    ),
-                ),
-                update_hooks=(
-                    lambda _: push(),
+            ]:
+                report.progress.verbose = (
+                    f"requesting validation for '{ip.path}'"
                 )
-            )
-            try:
-                children.remove(ip_id)
-            except KeyError:
-                # submission via adapter gave `None`; nothing to abort
-                pass
-            ip.valid = self.ip_builder_adapter.success(info)
+                push()
+                if not inner_request_body:
+                    continue
+                log_id = f"{ip_id}@{name}"
+                if not ip.log_id:
+                    ip.log_id = []
+                ip.log_id.append(log_id)
+                report.children[log_id] = {}
+                push()
+                adapter.run(
+                    base_request_body={"validation": inner_request_body},
+                    target={"path": str(ip.path)},
+                    info=(
+                        info := services.APIResult(
+                            report=report.children[log_id]
+                        )
+                    ),
+                    post_submission_hooks=(
+                        # link to children
+                        children.link_ex(
+                            url=adapter.url,
+                            abort_path="/validate",
+                            tag=ip_id,
+                            child_id=log_id,
+                            post_link_hook=push,
+                        ),
+                    ),
+                    update_hooks=(lambda _: push(),),
+                )
+                try:
+                    children.remove(ip_id)
+                except KeyError:
+                    # submission via adapter gave `None`; nothing to abort
+                    pass
+                validation_results.append(adapter.valid(info))
+                report.log.merge(
+                    Logger(json=info.report.get("log", {})).pick(Context.ERROR)
+                )
+            ip.valid = all(validation_results)
             if not ip.valid:
                 errors += 1
             report.log.log(
                 Context.INFO,
-                body=f"IP '{ip}' is {'valid' if ip.valid else 'invalid'}."
+                body=(
+                    f"IP '{ip.path}' is {'valid' if ip.valid else 'invalid'}."
+                ),
             )
             push()
         report.data.success = errors == 0
         report.log.log(
             Context.INFO if report.data.success else Context.ERROR,
-            body=f"There were {errors} errors during validation."
+            body=f"There were {errors} errors during validation.",
         )
         push()

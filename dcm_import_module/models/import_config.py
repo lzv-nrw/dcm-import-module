@@ -5,20 +5,11 @@ ImportConfig data-model definitions
 from dataclasses import dataclass
 from pathlib import Path
 
-from dcm_common.models import JSONObject, DataModel
+from dcm_common.models import DataModel
+from dcm_common.services.plugins import PluginConfig
 
 
-@dataclass
-class ImportConfigExternal(DataModel):
-    """
-    Data model for the configuration of an import from external source.
-
-    Keyword arguments:
-    plugin -- plugin name identifier
-    args -- key-value pairs of arguments for import module plugin
-    """
-    plugin: str
-    args: JSONObject
+ImportConfigExternal = PluginConfig
 
 
 @dataclass
