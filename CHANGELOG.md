@@ -1,6 +1,6 @@
 # Changelog
 
-## [X.Y.Z] - 2025-??-??
+## [4.0.0] - 2025-02-14
 
 ### Changed
 
@@ -8,12 +8,6 @@
 - **Breaking:** migrated to Object Validator API v5
 - **Breaking:** migrated to IP Builder API v4
 - **Breaking:** migrated to Import Module API v6
-
-### Added
-
-### Removed
-
-### Fixed
 
 ## [3.0.2] - 2024-11-28
 
