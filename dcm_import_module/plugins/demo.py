@@ -24,6 +24,7 @@ class DemoPlugin(IEImportPlugin):
     _DEPENDENCIES = []
 
     _SIGNATURE = Signature(
+        test=IEImportPlugin.signature.properties["test"],
         number=Argument(
             type_=JSONType.INTEGER,
             required=False,
@@ -202,6 +203,12 @@ class DemoPlugin(IEImportPlugin):
                 body=f"Created IE in '{context.result.ies[ie_id].path}'.",
                 origin=self._NAME,
             )
+            if not context.result.ies[ie_id].fetched_payload:
+                context.result.log.log(
+                    Context.ERROR,
+                    body=f"Missing payload in IE '{ie_id}'.",
+                    origin=self._NAME,
+                )
             context.push()
 
         # eval

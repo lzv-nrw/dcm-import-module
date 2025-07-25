@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.2.0] - 2025-07-25
+
+### Added
+
+- added test-import mode (internal and external)
+- added second version of oai-plugin to support multiple sets and transferUrlFilters based on xpath
+
+### Fixed
+
+- added logging of an error-message when generating a bad IE with demo-plugin
+- fixed initialization of ScalableOrchestrator with ORCHESTRATION_PROCESSES
+
 ## [4.0.0] - 2025-02-14
 
 ### Changed

@@ -10,7 +10,7 @@ from flask import jsonify, request as flask_request, Response
 from dcm_common import LoggingContext as Context
 
 from dcm_import_module import app_factory
-from dcm_import_module.plugins import OAIPMHPlugin
+from dcm_import_module.plugins import OAIPMHPlugin, OAIPMHPlugin2
 
 
 @pytest.fixture(name="minimal_request_body")
@@ -137,8 +137,16 @@ def test_import_empty(
     assert "IPs" not in json["data"]
 
 
+@pytest.mark.parametrize(
+    ("plugin", "transfer_url_info"),
+    [
+        (OAIPMHPlugin, {"regex": "asd"}),
+        (OAIPMHPlugin2, [{"regex": "asd"}]),
+    ],
+    ids=["OAIPMHPlugin", "OAIPMHPlugin2"]
+)
 def test_timeout_of_source_system(
-    testing_config, wait_for_report, run_service
+    testing_config, wait_for_report, run_service, plugin, transfer_url_info
 ):
     """Test import behavior when source system times out."""
 
@@ -146,7 +154,7 @@ def test_timeout_of_source_system(
         SOURCE_SYSTEM_TIMEOUT = 0.1
         SOURCE_SYSTEM_TIMEOUT_RETRIES = 1
         SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL = 1
-        SUPPORTED_PLUGINS = [OAIPMHPlugin]
+        SUPPORTED_PLUGINS = [plugin]
 
     client = app_factory(ThisConfig()).test_client()
     run_service(
@@ -167,11 +175,9 @@ def test_timeout_of_source_system(
         "/import/external",
         json={
             "import": {
-                "plugin": OAIPMHPlugin.name,
+                "plugin": plugin.name,
                 "args": {
-                    "transfer_url_info": {
-                        "regex": "asd"
-                    },
+                    "transfer_url_info": transfer_url_info,
                     "base_url": "http://localhost:8082/get",
                     "metadata_prefix": ""
                 }

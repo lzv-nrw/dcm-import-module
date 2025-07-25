@@ -4,6 +4,7 @@ Import View-class definition
 
 from typing import Optional
 from pathlib import Path
+from random import sample
 
 from flask import Blueprint, jsonify
 from data_plumber_http.decorators import flask_handler, flask_args, flask_json
@@ -158,6 +159,8 @@ class InternalImportView(services.OrchestratedView):
         else:
             potential_ips = [import_config.target.path]
 
+        # filter implausible
+        ips = []
         for i, ip in enumerate(potential_ips):
             report.progress.verbose = (
                 f"{progress_verbose_base_msg} ({i + 1}/{len(potential_ips)})"
@@ -170,6 +173,36 @@ class InternalImportView(services.OrchestratedView):
                 )
                 push()
                 continue
+            ips.append(ip)
+
+        # filter in case of test-import
+        if import_config.test and self.config.IMPORT_TEST_VOLUME < len(ips):
+            ips.sort(key=lambda ip: ip.name)
+            report.log.log(
+                Context.INFO,
+                body=(
+                    f"Limiting number of records from {len(ips)} down to "
+                    + f"{self.config.IMPORT_TEST_VOLUME} via "
+                    + f"'{self.config.IMPORT_TEST_STRATEGY}'-strategy."
+                ),
+            )
+            push()
+            match self.config.IMPORT_TEST_STRATEGY:
+                case "first":
+                    ips = ips[
+                        : self.config.IMPORT_TEST_VOLUME
+                    ]
+                case "random":
+                    ips = sample(
+                        ips, k=self.config.IMPORT_TEST_VOLUME
+                    )
+                case _:
+                    raise ValueError(
+                        "Unknown test-strategy "
+                        + f"'{self.config.IMPORT_TEST_STRATEGY}'."
+                    )
+
+        for i, ip in enumerate(ips):
             report.data.ips[ip.name] = IP(ip)
 
         # perform validation if requested

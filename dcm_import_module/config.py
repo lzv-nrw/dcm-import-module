@@ -8,7 +8,7 @@ import yaml
 from dcm_common.services import FSConfig, OrchestratedAppConfig
 import dcm_import_module_api
 
-from dcm_import_module.plugins import OAIPMHPlugin, DemoPlugin
+from dcm_import_module.plugins import OAIPMHPlugin, OAIPMHPlugin2, DemoPlugin
 
 
 class AppConfig(FSConfig, OrchestratedAppConfig):
@@ -25,8 +25,11 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
     USE_DEMO_PLUGIN = (int(os.environ.get("USE_DEMO_PLUGIN") or 0)) == 1
     # output directory for ie-extraction (relative to FS_MOUNT_POINT)
     IE_OUTPUT = Path(os.environ.get("IE_OUTPUT") or "ie/")
+    # test-imports
+    IMPORT_TEST_STRATEGY = os.environ.get("IMPORT_TEST_STRATEGY", "first")
+    IMPORT_TEST_VOLUME = int(os.environ.get("IMPORT_TEST_VOLUME") or 2)
     # available plugins
-    SUPPORTED_PLUGINS = [OAIPMHPlugin] + (
+    SUPPORTED_PLUGINS = [OAIPMHPlugin, OAIPMHPlugin2] + (
             [DemoPlugin] if USE_DEMO_PLUGIN else []
     )
 
@@ -55,6 +58,8 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
                 self.IE_OUTPUT,
                 timeout=self.SOURCE_SYSTEM_TIMEOUT,
                 max_retries=self.SOURCE_SYSTEM_TIMEOUT_RETRIES,
+                test_strategy=self.IMPORT_TEST_STRATEGY,
+                test_volume=self.IMPORT_TEST_VOLUME,
             )
 
         super().__init__(**kwargs)
@@ -85,6 +90,10 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
                 "duration": int(self.SOURCE_SYSTEM_TIMEOUT),
                 "max_retries": self.SOURCE_SYSTEM_TIMEOUT_RETRIES,
                 "retry_interval": self.SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL
+            },
+            "test": {
+                "volume": self.IMPORT_TEST_VOLUME,
+                "strategy": self.IMPORT_TEST_STRATEGY,
             }
         }
         settings["build"] = {

@@ -3,7 +3,7 @@ from dcm_import_module.plugins.interface import (
     IEImportResult,
     IEImportContext,
 )
-from dcm_import_module.plugins.oai_pmh import OAIPMHPlugin
+from dcm_import_module.plugins.oai_pmh import OAIPMHPlugin, OAIPMHPlugin2
 from dcm_import_module.plugins.demo import DemoPlugin
 
 __all__ = [
@@ -11,5 +11,6 @@ __all__ = [
     "IEImportResult",
     "IEImportContext",
     "OAIPMHPlugin",
+    "OAIPMHPlugin2",
     "DemoPlugin",
 ]

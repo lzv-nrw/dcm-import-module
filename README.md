@@ -100,12 +100,17 @@ It is based on the general-purpose plugin-system implemented in `dcm-common`.
 Currently, the following plugins are pre-defined:
 * `demo`: generates test-data in a OAI-PMH-like format (in the default configuration, this plugin needs to be enabled explicitly by setting `USE_DEMO_PLUGIN`)
 * `oai_pmh`: import based on the OAI-protocol for metadata harvesting
+* `oai_pmh_v2`: import based on the OAI-protocol for metadata harvesting; supports multiple sets and multiple transferUrlFilters based on xpath
 
 The expected call signatures for individual plugins are provided via the API (endpoint `GET-/identify`).
 
 ## Environment/Configuration
 Service-specific environment variables are
 * `IE_OUTPUT` [DEFAULT "ie/"] output directory for extracted IEs (relative to `FS_MOUNT_POINT`)
+* `IMPORT_TEST_STRATEGY` [DEFAULT "first"] strategy for selecting records during a test-import
+  * `"first"`: use records in their order of appearance
+  * `"random"`: randomize records in every call
+* `IMPORT_TEST_VOLUME` [DEFAULT 2] maximum number of records processed during a test-import
 * `SOURCE_SYSTEM_TIMEOUT` [DEFAULT 30] time until a request made to a source system times out in seconds
 * `SOURCE_SYSTEM_TIMEOUT_RETRIES` [DEFAULT 3]: number of retries for failed import
 * `USE_DEMO_PLUGIN` [DEFAULT 0]: make the demo-plugin available

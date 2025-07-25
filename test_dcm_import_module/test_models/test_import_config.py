@@ -19,6 +19,6 @@ test_importconfigexternal_json = get_model_serialization_test(
 test_importconfiginternal_json = get_model_serialization_test(
     ImportConfigInternal, (
         ((Target(Path(".")),), {}),
-        ((Target(Path(".")), False), {}),
+        ((Target(Path(".")), False, False), {}),
     )
 )

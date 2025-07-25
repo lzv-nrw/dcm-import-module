@@ -10,7 +10,9 @@ from dcm_common.plugins import (
     PluginInterface,
     PluginResult,
     PluginExecutionContext,
+    JSONType,
     Signature,
+    Argument,
 )
 from dcm_common.util import get_output_path
 
@@ -44,16 +46,31 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
     The plugin-context is already being set here.
 
     An implementation's `PluginResult` should inherit from
-    `IEImportResult`.
+    `IEImportResult` and only ever extend the common `Signature` defined
+    in this interface.
 
     Keyword arguments:
     working_dir -- output directory
     timeout -- remote system timeout duration
     max_retries -- remote system timeout duration
+    test_strategy -- strategy for selecting identifiers during a
+                     test-import (one of "first", "random")
+                     (default None, uses "first")
+    test_volume -- max. number of identifiers considered during a
+                   test-import
+                   (default 2)
     """
 
     _CONTEXT = "import"
-    _SIGNATURE = Signature()
+    _SIGNATURE = Signature(
+        test=Argument(
+            JSONType.BOOLEAN,
+            required=False,
+            default=False,
+            description="whether to run in test-mode",
+            example=True,
+        ),
+    )
     _RESULT_TYPE = IEImportResult
 
     def __init__(
@@ -61,12 +78,29 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
         working_dir: Path,
         timeout: Optional[float] = 30,
         max_retries: int = 1,
+        test_strategy: Optional[str] = None,
+        test_volume: int = 2,
         **kwargs,
     ) -> None:
         super().__init__()
         self._working_dir = working_dir
         self._timeout = timeout
         self._max_retries = max_retries
+        if test_strategy is not None and test_strategy not in [
+            "first",
+            "random",
+        ]:
+            raise ValueError(
+                f"Unknown test-strategy '{test_strategy}' in plugin "
+                + f"'{self._NAME}'."
+            )
+        self._test_strategy = test_strategy
+        if test_volume <= 0:
+            raise ValueError(
+                "Bad test-volume configuration in plugin '{self._NAME}': "
+                + f"Value should be >= 1 (got {test_volume}) ."
+            )
+        self._test_volume = test_volume
 
     def _get_ie_output(self) -> Optional[Path]:
         """

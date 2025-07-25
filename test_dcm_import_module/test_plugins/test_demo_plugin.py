@@ -1,11 +1,11 @@
 """
-Test suite for the OAI-PMH-plugin.
+Test suite for the demo-plugin.
 """
 
 from unittest import mock
 
 import pytest
-from dcm_common import Logger
+from dcm_common import LoggingContext as Context, Logger
 
 from dcm_import_module.models import IE
 from dcm_import_module.plugins import IEImportResult, DemoPlugin
@@ -103,3 +103,5 @@ def test_get_bad_ies(file_storage, bad_ies):
         all(ie.fetched_payload for ie in plugin_result.ies.values())
         is not bad_ies
     )
+    if bad_ies:
+        assert Context.ERROR in plugin_result.log

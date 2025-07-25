@@ -46,7 +46,10 @@ class ImportConfigInternal(DataModel):
               import
     batch -- whether to search for multiple IPs in the given `Target`
              (default True)
+    test -- whether to run import in test-mode
+            (default False)
     """
 
     target: Target
     batch: bool = True
+    test: bool = False

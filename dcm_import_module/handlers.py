@@ -59,10 +59,12 @@ def get_internal_import_handler(cwd: Path):
                         accept_only=["path"],
                     ),
                     Property("batch", default=True): Boolean(),
+                    Property("test", default=False): Boolean(),
                 },
                 accept_only=[
                     "target",
                     "batch",
+                    "test",
                 ],
             ),
             Property(

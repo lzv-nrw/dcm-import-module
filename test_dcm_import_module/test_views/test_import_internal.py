@@ -363,3 +363,49 @@ def test_import_abort(
     assert "Aborting child" in str(report["log"])
     assert "ip0@ip_builder" in report["children"]
     assert report["children"]["ip0@ip_builder"] == {"intermediate": "data"}
+
+
+@pytest.mark.parametrize(
+    ("max_records", "expected_ips"),
+    [
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (4, 3),
+    ],
+)
+def test_import_test(
+    create_fake_ip,
+    client,
+    wait_for_report,
+    testing_config,
+    max_records,
+    expected_ips,
+):
+    """
+    Test test-import of multiple IPs via /import/internal-endpoint.
+    """
+
+    testing_config.IMPORT_TEST_VOLUME = max_records
+    client = app_factory(testing_config()).test_client()
+
+    hotfolder = Path(str(uuid4()))
+    create_fake_ip(hotfolder / "ip0")
+    create_fake_ip(hotfolder / "ip1")
+    create_fake_ip(hotfolder / "ip2")
+    # make request for test-import
+    response = client.post(
+        "/import/internal",
+        json={
+            "import": {
+                "target": {"path": str(hotfolder)},
+                "test": True
+            }
+        }
+    )
+    assert client.put("/orchestration?until-idle", json={}).status_code == 200
+    json = wait_for_report(client, response.json["value"])
+
+    assert json["data"]["success"]
+    assert len(json["data"]["IPs"]) == expected_ips
+    print(json["log"])

@@ -85,6 +85,16 @@ def test_external_import_handler(external_import_handler, json, status):
                 },
                 Responses.GOOD.status,
             ),
+            ({"import": {"target": {"path": "."}, "batch": None}}, 422),
+            (
+                {"import": {"target": {"path": "."}, "batch": False}},
+                Responses.GOOD.status,
+            ),
+            ({"import": {"target": {"path": "."}, "test": None}}, 422),
+            (
+                {"import": {"target": {"path": "."}, "test": False}},
+                Responses.GOOD.status,
+            ),
         ]
     ),
     ids=[f"stage {i+1}" for i in range(len(pytest_args))],
