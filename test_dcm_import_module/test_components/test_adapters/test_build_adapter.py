@@ -65,7 +65,7 @@ def _report(url, token, request_body):
             ]
         },
         "data": {
-            "build_plugin": "bagit-bag-builder",
+            "requestType": "build",
             "valid": True,
             "success": True,
             "details": {},

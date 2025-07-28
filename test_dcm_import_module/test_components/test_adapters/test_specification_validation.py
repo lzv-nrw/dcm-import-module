@@ -65,7 +65,12 @@ def _report(url, token, request_body):
                 },
             ]
         },
-        "data": {"valid": True, "success": True, "details": {}},
+        "data": {
+            "requestType": "validation",
+            "valid": True,
+            "success": True,
+            "details": {},
+        },
     }
 
 

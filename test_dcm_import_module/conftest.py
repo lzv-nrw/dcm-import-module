@@ -96,7 +96,7 @@ def _fake_build_report():
         "progress": {"status": "completed", "verbose": "Done", "numeric": 100},
         "log": {},
         "data": {
-            "build_plugin": "bagit-bag-builder",
+            "requestType": "build",
             "path": "ip/abcde-12345-fghijk-67890",
             "valid": True,
             "success": True,
@@ -118,6 +118,7 @@ def _fake_validation_report():
         "progress": {"status": "completed", "verbose": "Done", "numeric": 100},
         "log": {},
         "data": {
+            "requestType": "validation",
             "valid": True,
             "success": True,
             "details": {

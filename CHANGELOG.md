@@ -1,5 +1,11 @@
 # Changelog
 
+## [4.2.1] - 2025-07-28
+
+### Fixed
+
+- loosened dcm-ip-builder-sdk version range (supports v5)
+
 ## [4.2.0] - 2025-07-25
 
 ### Added
