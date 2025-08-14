@@ -32,6 +32,12 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
     SUPPORTED_PLUGINS = [OAIPMHPlugin, OAIPMHPlugin2] + (
             [DemoPlugin] if USE_DEMO_PLUGIN else []
     )
+    # OAI-plugins
+    OAI_MAX_RESUMPTION_TOKENS = (
+        int(os.environ["OAI_MAX_RESUMPTION_TOKENS"])
+        if "OAI_MAX_RESUMPTION_TOKENS" in os.environ
+        else None
+    )
 
     # ------ CALL IP BUILDER ------
     IP_BUILDER_HOST = \
@@ -58,6 +64,7 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
                 self.IE_OUTPUT,
                 timeout=self.SOURCE_SYSTEM_TIMEOUT,
                 max_retries=self.SOURCE_SYSTEM_TIMEOUT_RETRIES,
+                max_resumption_tokens=self.OAI_MAX_RESUMPTION_TOKENS,
                 test_strategy=self.IMPORT_TEST_STRATEGY,
                 test_volume=self.IMPORT_TEST_VOLUME,
             )

@@ -156,7 +156,7 @@ def test_timeout_of_source_system(
         SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL = 1
         SUPPORTED_PLUGINS = [plugin]
 
-    client = app_factory(ThisConfig()).test_client()
+    client = app_factory(ThisConfig(), block=True).test_client()
     run_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
@@ -189,7 +189,7 @@ def test_timeout_of_source_system(
 
     assert not json["data"]["success"]
     assert Context.ERROR.name in json["log"]
-    assert "timeout" in str(json["log"])
+    assert "Timeout" in str(json["log"])
 
 
 def test_import_no_path(
@@ -445,7 +445,7 @@ def test_timeout_of_ip_builder(
 
     class ThisConfig(testing_config):
         IP_BUILDER_JOB_TIMEOUT = 0.25
-    client = app_factory(ThisConfig()).test_client()
+    client = app_factory(ThisConfig(), block=True).test_client()
     run_service(
         routes=[
             ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),

@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    version="4.2.1",
+    version="4.4.0",
     name="dcm-import-module",
     description="flask app implementing the DCM Import Module API",
     author="LZV.nrw",

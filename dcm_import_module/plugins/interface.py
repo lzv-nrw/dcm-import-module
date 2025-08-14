@@ -53,6 +53,9 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
     working_dir -- output directory
     timeout -- remote system timeout duration
     max_retries -- remote system timeout duration
+    max_resumption_tokens -- maximum number of processed resumption tokens;
+                             only considered when positive
+                             (default None leads to no restriction)
     test_strategy -- strategy for selecting identifiers during a
                      test-import (one of "first", "random")
                      (default None, uses "first")
@@ -78,6 +81,7 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
         working_dir: Path,
         timeout: Optional[float] = 30,
         max_retries: int = 1,
+        max_resumption_tokens: Optional[int] = None,
         test_strategy: Optional[str] = None,
         test_volume: int = 2,
         **kwargs,
@@ -86,6 +90,7 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
         self._working_dir = working_dir
         self._timeout = timeout
         self._max_retries = max_retries
+        self._max_resumption_tokens = max_resumption_tokens
         if test_strategy is not None and test_strategy not in [
             "first",
             "random",
@@ -131,16 +136,16 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
         """
 
         result = None
-        log = Logger(default_origin=self._NAME)
+        log = Logger(default_origin=self._DISPLAY_NAME)
         retry = 0
         while 0 <= retry <= self._max_retries:
             try:
                 result = cmd(*(args or ()), **(kwargs or {}))
                 break
-            except exceptions:
+            except exceptions as exc_info:
                 log.log(
                     Context.ERROR,
-                    body="Encountered timeout"
+                    body=f"Encountered '{type(exc_info).__name__}'"
                     + (f" while '{description}'" if description else "")
                     + f". (Attempt {retry + 1}/{self._max_retries + 1})",
                 )

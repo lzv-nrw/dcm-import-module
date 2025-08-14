@@ -152,7 +152,7 @@ class OAIPMHPlugin(IEImportPlugin):
             interface.list_identifiers_exhaustive,
             kwargs=request_args,
             description="collecting identifiers",
-            exceptions=requests.exceptions.ReadTimeout,
+            exceptions=(requests.exceptions.ReadTimeout, OverflowError),
         )
 
     def _get_records(
@@ -275,6 +275,7 @@ class OAIPMHPlugin(IEImportPlugin):
             # get identifiers via interface
             request_args = {  # build request body
                 "metadata_prefix": kwargs["metadata_prefix"],
+                "_max_resumption_tokens": self._max_resumption_tokens
             }
             if "from_" in kwargs:
                 request_args["_from"] = kwargs["from_"]
@@ -451,5 +452,5 @@ class OAIPMHPlugin2(OAIPMHPlugin):
             interface.list_identifiers_exhaustive_multiple_sets,
             kwargs=request_args,
             description="collecting identifiers",
-            exceptions=requests.exceptions.ReadTimeout,
+            exceptions=(requests.exceptions.ReadTimeout, OverflowError),
         )

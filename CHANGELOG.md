@@ -1,5 +1,15 @@
 # Changelog
 
+## [4.4.0] - 2025-08-14
+
+### Changed
+
+- migrated to new extension system
+
+### Added
+
+- added optional constructor parameters `max_resumption_tokens` to the oai-plugins and controlled via the app-config
+
 ## [4.2.1] - 2025-07-28
 
 ### Fixed

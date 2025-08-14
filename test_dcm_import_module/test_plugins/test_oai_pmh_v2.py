@@ -423,3 +423,64 @@ def test_get_identifiers_test_volume(
         )
 
     get_record_patcher.stop()
+
+
+@pytest.mark.parametrize(
+    ("max_resumption_tokens", "expected_ies"),
+    [
+        (-2, 2),
+        (-1, 2),
+        (0, 2),
+        (None, 2),
+        (1, 0),  # raises OverflowError, logs an error and returns no IE
+        (2, 2),
+    ]
+)
+def test_get_max_resumption_tokens(
+    file_storage,
+    oai_url,
+    get_record_patcher,
+    max_resumption_tokens,
+    expected_ies,
+):
+    """
+    Test method `get` of `OAIPMH`-plugin with different
+    `max_resumption_tokens`.
+    """
+
+    max_counter = 2
+
+    counter = [0]  # non-primitive type to enable use in fake function
+    def fake_list_identifiers(_resumption_token, *args, **kwargs):
+        if counter[0] < max_counter:
+            counter[0] = counter[0] + 1
+            return [str(counter[0])], "x"
+        return [], None
+
+    with mock.patch(
+        "oai_pmh_extractor.repository_interface.RepositoryInterface.list_identifiers",
+        side_effect=fake_list_identifiers,
+    ), mock.patch(
+        "oai_pmh_extractor.payload_collector.PayloadCollector.download_file",
+        lambda *args, **kwargs: None,
+    ):
+        get_record_patcher.start()
+
+        plugin = OAIPMHPlugin2(
+            file_storage, max_resumption_tokens=max_resumption_tokens
+        )
+        result = plugin.get(
+            None,
+            transfer_url_info=[{"regex": "()"}],
+            base_url=oai_url,
+            metadata_prefix="",
+        )
+        assert len(result.ies) == expected_ies
+
+    if expected_ies == 0:
+        assert (
+            "Encountered 'OverflowError' while 'collecting identifiers'"
+            in str(result.log.json)
+        )
+
+    get_record_patcher.stop()

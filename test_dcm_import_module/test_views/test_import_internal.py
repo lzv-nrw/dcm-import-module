@@ -220,7 +220,7 @@ def test_import_builder_timeout(
     )
 
     testing_config.IP_BUILDER_JOB_TIMEOUT = 0.001
-    client = app_factory(testing_config()).test_client()
+    client = app_factory(testing_config(), block=True).test_client()
 
     # make request for import
     response = client.post(
@@ -387,7 +387,7 @@ def test_import_test(
     """
 
     testing_config.IMPORT_TEST_VOLUME = max_records
-    client = app_factory(testing_config()).test_client()
+    client = app_factory(testing_config(), block=True).test_client()
 
     hotfolder = Path(str(uuid4()))
     create_fake_ip(hotfolder / "ip0")

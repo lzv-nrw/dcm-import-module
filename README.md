@@ -113,6 +113,7 @@ Service-specific environment variables are
 * `IMPORT_TEST_VOLUME` [DEFAULT 2] maximum number of records processed during a test-import
 * `SOURCE_SYSTEM_TIMEOUT` [DEFAULT 30] time until a request made to a source system times out in seconds
 * `SOURCE_SYSTEM_TIMEOUT_RETRIES` [DEFAULT 3]: number of retries for failed import
+* `OAI_MAX_RESUMPTION_TOKENS` [DEFAULT null]: maximum number of processed resumption tokens during an import with an OAI-PMH-Plugin; only relevant when positive
 * `USE_DEMO_PLUGIN` [DEFAULT 0]: make the demo-plugin available
 * `IP_BUILDER_HOST` [DEFAULT http://localhost:8081] host address for IP Builder-service
 * `IP_BUILDER_JOB_TIMEOUT` [DEFAULT 3600]: time until a job of the IP Builder-service times out in seconds
