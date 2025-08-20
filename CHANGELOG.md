@@ -1,5 +1,11 @@
 # Changelog
 
+## [4.5.0] - 2025-08-20
+
+### Added
+
+- added support for submission token
+
 ## [4.4.0] - 2025-08-14
 
 ### Changed

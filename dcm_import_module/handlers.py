@@ -3,7 +3,7 @@
 from typing import Mapping
 from pathlib import Path
 
-from dcm_common.services import handlers, TargetPath
+from dcm_common.services import handlers, TargetPath, UUID
 from data_plumber_http import Property, Object, String, Url, Boolean
 
 from dcm_import_module.plugins import IEImportPlugin
@@ -32,11 +32,18 @@ def get_external_import_handler(acceptable_plugins: Mapping[str, IEImportPlugin]
                 free_form=True
             ),
             Property("build"): Object(free_form=True),
+            Property("token"): UUID(),
             Property("callbackUrl", name="callback_url"): Url(
                 schemes=["http", "https"]
             ),
         },
-        accept_only=["import", "build", "objectValidation", "callbackUrl"],
+        accept_only=[
+            "import",
+            "build",
+            "objectValidation",
+            "token",
+            "callbackUrl",
+        ],
     ).assemble()
 
 
@@ -73,6 +80,7 @@ def get_internal_import_handler(cwd: Path):
             Property("objectValidation", name="obj_validation"): Object(
                 free_form=True
             ),
+            Property("token"): UUID(),
             Property("callbackUrl", name="callback_url"): Url(
                 schemes=["http", "https"]
             ),
@@ -81,6 +89,7 @@ def get_internal_import_handler(cwd: Path):
             "import",
             "specificationValidation",
             "objectValidation",
+            "token",
             "callbackUrl",
         ],
     ).assemble()

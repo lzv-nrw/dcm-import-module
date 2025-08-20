@@ -47,6 +47,27 @@ def _internal_import_handler(testing_config):
                 },
                 Responses.GOOD.status,
             ),
+            (
+                {
+                    "import": {"plugin": "demo", "args": {}},
+                    "token": None,
+                },
+                422,
+            ),
+            (
+                {
+                    "import": {"plugin": "demo", "args": {}},
+                    "token": "non-uuid",
+                },
+                422,
+            ),
+            (
+                {
+                    "import": {"plugin": "demo", "args": {}},
+                    "token": "37ee72d6-80ab-4dcd-a68d-f8d32766c80d",
+                },
+                Responses.GOOD.status,
+            ),
         ]
     ),
     ids=[f"stage {i+1}" for i in range(len(pytest_args))],
@@ -93,6 +114,27 @@ def test_external_import_handler(external_import_handler, json, status):
             ({"import": {"target": {"path": "."}, "test": None}}, 422),
             (
                 {"import": {"target": {"path": "."}, "test": False}},
+                Responses.GOOD.status,
+            ),
+            (
+                {
+                    "import": {"target": {"path": "."}},
+                    "token": None,
+                },
+                422,
+            ),
+            (
+                {
+                    "import": {"target": {"path": "."}},
+                    "token": "non-uuid",
+                },
+                422,
+            ),
+            (
+                {
+                    "import": {"target": {"path": "."}},
+                    "token": "37ee72d6-80ab-4dcd-a68d-f8d32766c80d",
+                },
                 Responses.GOOD.status,
             ),
         ]

@@ -6,7 +6,7 @@ from typing import Optional
 from pathlib import Path
 from random import sample
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, Response
 from data_plumber_http.decorators import flask_handler, flask_args, flask_json
 from dcm_common import LoggingContext as Context, Logger, services
 from dcm_common.orchestration import JobConfig, Job, Children
@@ -55,20 +55,30 @@ class InternalImportView(services.OrchestratedView):
             import_: ImportConfigInternal,
             spec_validation: Optional[dict] = None,
             obj_validation: Optional[dict] = None,
+            token: Optional[str] = None,
             callback_url: Optional[str] = None,
         ):
             """Handle request for import from internal storage."""
-            token = self.orchestrator.submit(
-                JobConfig(
-                    request_body={
-                        "import": import_.json,
-                        "spec_validation": spec_validation,
-                        "obj_validation": obj_validation,
-                        "callback_url": callback_url,
-                    },
-                    context=self.NAME,
+            try:
+                token = self.orchestrator.submit(
+                    JobConfig(
+                        request_body={
+                            "import": import_.json,
+                            "spec_validation": spec_validation,
+                            "obj_validation": obj_validation,
+                            "callback_url": callback_url,
+                        },
+                        context=self.NAME,
+                    ),
+                    token=token,
                 )
-            )
+            except ValueError as exc_info:
+                return Response(
+                    f"Submission rejected: {exc_info}",
+                    mimetype="text/plain",
+                    status=400,
+                )
+
             return jsonify(token.json), 201
 
         self._register_abort_job(bp, "/import")
