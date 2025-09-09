@@ -25,7 +25,7 @@ Using a virtual environment is recommended.
 1. To manually use the API, either run command line tools like `curl` as, e.g.,
    ```
    curl -X 'POST' \
-     'http://localhost:8080/import/external' \
+     'http://localhost:8080/import/ies' \
      -H 'accept: application/json' \
      -H 'Content-Type: application/json' \
      -d '{
@@ -115,10 +115,10 @@ Service-specific environment variables are
 * `SOURCE_SYSTEM_TIMEOUT_RETRIES` [DEFAULT 3]: number of retries for failed import
 * `OAI_MAX_RESUMPTION_TOKENS` [DEFAULT null]: maximum number of processed resumption tokens during an import with an OAI-PMH-Plugin; only relevant when positive
 * `USE_DEMO_PLUGIN` [DEFAULT 0]: make the demo-plugin available
+* `SERVICE_TIMEOUT` [DEFAULT 3600]: time until a job in another service times out in seconds
+* `SERVICE_POLL_INTERVAL` [DEFAULT 1]: interval for polling of another service in seconds
 * `IP_BUILDER_HOST` [DEFAULT http://localhost:8081] host address for IP Builder-service
-* `IP_BUILDER_JOB_TIMEOUT` [DEFAULT 3600]: time until a job of the IP Builder-service times out in seconds
 * `OBJECT_VALIDATOR_HOST` [DEFAULT http://localhost:8082] host address for Object Validator-service
-* `OBJECT_VALIDATOR_JOB_TIMEOUT` [DEFAULT 3600]: time until a job of the Object Validator-service times out in seconds
 
 Additionally this service provides environment options for
 * `BaseConfig`,

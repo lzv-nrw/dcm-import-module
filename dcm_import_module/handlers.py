@@ -7,7 +7,7 @@ from dcm_common.services import handlers, TargetPath, UUID
 from data_plumber_http import Property, Object, String, Url, Boolean
 
 from dcm_import_module.plugins import IEImportPlugin
-from dcm_import_module.models.import_config import Target, ImportConfigInternal
+from dcm_import_module.models.import_config import Target, ImportConfigIPs
 
 
 report_handler = Object(
@@ -16,7 +16,7 @@ report_handler = Object(
 ).assemble()
 
 
-def get_external_import_handler(acceptable_plugins: Mapping[str, IEImportPlugin]):
+def get_ies_import_handler(acceptable_plugins: Mapping[str, IEImportPlugin]):
     """
     Returns parameterized handler (based on allowed plugins)
     """
@@ -47,14 +47,14 @@ def get_external_import_handler(acceptable_plugins: Mapping[str, IEImportPlugin]
     ).assemble()
 
 
-def get_internal_import_handler(cwd: Path):
+def get_ips_import_handler(cwd: Path):
     """
     Returns parameterized handler (based on cwd)
     """
     return Object(
         properties={
             Property("import", name="import_", required=True): Object(
-                model=ImportConfigInternal,
+                model=ImportConfigIPs,
                 properties={
                     Property("target", required=True): Object(
                         model=Target,

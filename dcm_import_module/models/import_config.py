@@ -9,7 +9,7 @@ from dcm_common.models import DataModel
 from dcm_common.services.plugins import PluginConfig
 
 
-ImportConfigExternal = PluginConfig
+ImportConfigIEs = PluginConfig
 
 
 @dataclass
@@ -37,9 +37,9 @@ class Target(DataModel):
 
 
 @dataclass
-class ImportConfigInternal(DataModel):
+class ImportConfigIPs(DataModel):
     """
-    Data model for the configuration of an import from internal storage.
+    Data model for the configuration of an import of IPs.
 
     Keyword arguments:
     target -- `Target`-object pointing to the directory from where to

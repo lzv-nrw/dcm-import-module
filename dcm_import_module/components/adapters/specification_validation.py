@@ -21,6 +21,9 @@ class SpecificationValidationAdapter(services.ServiceAdapter):
     def _get_api_endpoint(self):
         return self._api_client.validate
 
+    def _get_abort_endpoint(self):
+        return self._api_client.abort_validation
+
     def _build_request_body(self, base_request_body, target):
         if target is not None:
             if "validation" not in base_request_body:

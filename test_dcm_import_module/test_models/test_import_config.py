@@ -1,23 +1,23 @@
-"""ImportConfigExternal-data model test-module."""
+"""ImportConfig-data model test-module."""
 
 from pathlib import Path
 
 from dcm_common.models.data_model import get_model_serialization_test
 
 from dcm_import_module.models.import_config import (
-    ImportConfigExternal, Target, ImportConfigInternal
+    ImportConfigIEs, Target, ImportConfigIPs
 )
 
 
-test_importconfigexternal_json = get_model_serialization_test(
-    ImportConfigExternal, (
+test_importconfigies_json = get_model_serialization_test(
+    ImportConfigIEs, (
         (("plugin", {}), {}),
     )
 )
 
 
-test_importconfiginternal_json = get_model_serialization_test(
-    ImportConfigInternal, (
+test_importconfigips_json = get_model_serialization_test(
+    ImportConfigIPs, (
         ((Target(Path(".")),), {}),
         ((Target(Path(".")), False, False), {}),
     )

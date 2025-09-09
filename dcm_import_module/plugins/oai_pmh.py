@@ -4,7 +4,7 @@ from typing import Optional, Mapping
 from random import sample
 
 import requests
-from dcm_common.logger import LoggingContext as Context, Logger
+from dcm_common.logger import LoggingContext, Logger
 from dcm_common.plugins import PythonDependency, Signature, Argument, JSONType
 from dcm_common.util import qjoin
 from oai_pmh_extractor import (
@@ -184,7 +184,7 @@ class OAIPMHPlugin(IEImportPlugin):
                 description=f"fetching metadata of record {identifier}",
                 exceptions=requests.exceptions.ReadTimeout,
             )
-            if Context.ERROR in log:
+            if LoggingContext.ERROR in log:
                 context.result.log.merge(log)
                 context.push()
                 continue
@@ -197,12 +197,12 @@ class OAIPMHPlugin(IEImportPlugin):
             context.push()
             if record is None:
                 context.result.log.log(
-                    Context.ERROR, body=f"Got empty record '{identifier}'."
+                    LoggingContext.ERROR, body=f"Got empty record '{identifier}'."
                 )
                 continue
             if record.status == "deleted":
                 context.result.log.log(
-                    Context.WARNING,
+                    LoggingContext.WARNING,
                     body=f"Record '{identifier}' has been marked 'deleted'.",
                 )
                 continue
@@ -227,7 +227,7 @@ class OAIPMHPlugin(IEImportPlugin):
                 description=f"fetching payload of record {identifier}",
                 exceptions=requests.exceptions.ReadTimeout,
             )
-            if Context.ERROR in log:
+            if LoggingContext.ERROR in log:
                 context.result.log.merge(log)
                 context.push()
                 continue
@@ -288,10 +288,10 @@ class OAIPMHPlugin(IEImportPlugin):
                 interface, request_args, **kwargs
             )
             context.result.log.merge(log)
-            if Context.ERROR in log:
+            if LoggingContext.ERROR in log:
                 context.set_progress("collecting identifiers failed")
                 context.result.log.log(
-                    Context.ERROR, body="Collecting identifiers failed."
+                    LoggingContext.ERROR, body="Collecting identifiers failed."
                 )
                 context.push()
                 return context.result
@@ -303,7 +303,7 @@ class OAIPMHPlugin(IEImportPlugin):
                 and len(identifiers) > self._test_volume >= 0
             ):
                 context.result.log.log(
-                    Context.INFO,
+                    LoggingContext.INFO,
                     body=(
                         "Limiting number of identifiers from "
                         + f"{len(identifiers)} down to {self._test_volume} "
@@ -324,7 +324,7 @@ class OAIPMHPlugin(IEImportPlugin):
         # process identifiers
         if len(identifiers) == 0:
             context.result.log.log(
-                Context.WARNING, body="List of identifiers is empty."
+                LoggingContext.WARNING, body="List of identifiers is empty."
             )
             context.push()
         else:

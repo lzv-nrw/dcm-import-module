@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import abc
 from pathlib import Path
 
-from dcm_common import LoggingContext as Context, Logger
+from dcm_common import LoggingContext, Logger
 from dcm_common.plugins import (
     PluginInterface,
     PluginResult,
@@ -144,7 +144,7 @@ class IEImportPlugin(PluginInterface, metaclass=abc.ABCMeta):
                 break
             except exceptions as exc_info:
                 log.log(
-                    Context.ERROR,
+                    LoggingContext.ERROR,
                     body=f"Encountered '{type(exc_info).__name__}'"
                     + (f" while '{description}'" if description else "")
                     + f". (Attempt {retry + 1}/{self._max_retries + 1})",

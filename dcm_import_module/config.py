@@ -39,16 +39,15 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         else None
     )
 
+    # ------ SERVICE ADAPTERS ------
+    SERVICE_TIMEOUT = int(os.environ.get("SERVICE_TIMEOUT") or 3600)
+    SERVICE_POLL_INTERVAL = int(os.environ.get("SERVICE_POLL_INTERVAL") or 1)
     # ------ CALL IP BUILDER ------
     IP_BUILDER_HOST = \
         os.environ.get("IP_BUILDER_HOST") or "http://localhost:8081"
-    IP_BUILDER_JOB_TIMEOUT = \
-        int(os.environ.get("IP_BUILDER_JOB_TIMEOUT") or "3600")
     # ------ CALL OBJECT VALIDATOR ------
     OBJECT_VALIDATOR_HOST = \
         os.environ.get("OBJECT_VALIDATOR_HOST") or "http://localhost:8082"
-    OBJECT_VALIDATOR_JOB_TIMEOUT = \
-        int(os.environ.get("OBJECT_VALIDATOR_JOB_TIMEOUT") or "3600")
 
     # ------ API ------
     API_DOCUMENT = Path(dcm_import_module_api.__file__).parent / "openapi.yaml"
@@ -105,7 +104,7 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         }
         settings["build"] = {
             "timeout": {
-                "duration": self.IP_BUILDER_JOB_TIMEOUT
+                "duration": self.SERVICE_TIMEOUT
             }
         }
         # - plugins

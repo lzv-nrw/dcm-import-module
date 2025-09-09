@@ -22,6 +22,9 @@ class BuildAdapter(services.ServiceAdapter):
     def _get_api_endpoint(self):
         return self._api_client.build
 
+    def _get_abort_endpoint(self):
+        return self._api_client.abort_build
+
     def _build_request_body(self, base_request_body, target):
         if target is not None:
             if "build" not in base_request_body:

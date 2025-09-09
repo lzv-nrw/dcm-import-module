@@ -4,26 +4,18 @@ This flask app implements the 'Import Module'-API (see
 `openapi.yaml` in the sibling-package `dcm_import_module_api`).
 """
 
-from typing import Optional
 from time import time, sleep
 
 from flask import Flask
-from dcm_common.db import KeyValueStoreAdapter
-from dcm_common.orchestration import (
-    ScalableOrchestrator, get_orchestration_controls
-)
 from dcm_common.services import DefaultView, ReportView
 from dcm_common.services import extensions
 
 from dcm_import_module.config import AppConfig
-from dcm_import_module.views import ExternalImportView, InternalImportView
-from dcm_import_module.models import Report
+from dcm_import_module.views import ImportIEsView, ImportIPsView
 
 
 def app_factory(
     config: AppConfig,
-    queue: Optional[KeyValueStoreAdapter] = None,
-    registry: Optional[KeyValueStoreAdapter] = None,
     as_process: bool = False,
     block: bool = False,
 ):
@@ -31,10 +23,6 @@ def app_factory(
     Returns a flask-app-object.
 
     config -- app config derived from `AppConfig`
-    queue -- queue adapter override
-             (default None; use `MemoryStore`)
-    registry -- registry adapter override
-                (default None; use `MemoryStore`)
     as_process -- whether the app is intended to be run as process via
                   `app.run`; if `True`, startup tasks like starting
                   orchestration-daemon are prepended to `app.run`
@@ -48,50 +36,25 @@ def app_factory(
     app = Flask(__name__)
     app.config.from_object(config)
 
-    # create Orchestrator and OrchestratedView-classes
-    orchestrator = ScalableOrchestrator(
-        queue=queue or config.queue,
-        registry=registry or config.registry,
-        nprocesses=config.ORCHESTRATION_PROCESSES,
-    )
-    view_external = ExternalImportView(
-        config=config,
-        report_type=Report,
-        orchestrator=orchestrator,
-        context=ExternalImportView.NAME
-    )
-    view_internal = InternalImportView(
-        config=config,
-        report_type=Report,
-        orchestrator=orchestrator,
-        context=InternalImportView.NAME
-    )
+    # create OrchestratedView-classes
+    view_ies = ImportIEsView(config)
+    view_ips = ImportIPsView(config)
+    # and register job-types with the worker-pool
+    view_ies.register_job_types()
+    view_ips.register_job_types()
 
     # register extensions
     if config.ALLOW_CORS:
-        extensions.cors(app)
-    notifications_loader = extensions.notifications_loader(
-        app, config, as_process
-    )
-    orchestrator_loader = extensions.orchestration_loader(
-        app,
-        config,
-        orchestrator,
-        "Import Module",
-        as_process,
-        [
-            extensions.ExtensionEventRequirement(
-                notifications_loader.ready,
-                "connection to notification-service",
-            )
-        ],
+        app.extensions["cors"] = extensions.cors_loader(app)
+    app.extensions["orchestra"] = extensions.orchestra_loader(
+        app, config, config.worker_pool, "Import Module", as_process
     )
 
     def ready():
         """Define condition for readiness."""
         return (
-            not config.ORCHESTRATION_AT_STARTUP
-            or orchestrator_loader.ready.is_set()
+            not config.ORCHESTRA_AT_STARTUP
+            or app.extensions["orchestra"].ready.is_set()
         )
 
     # block until ready
@@ -100,39 +63,12 @@ def app_factory(
         while not ready() and time() - time0 < 10:
             sleep(0.01)
 
-    # register orchestrator-controls blueprint
-    if getattr(config, "TESTING", False) or config.ORCHESTRATION_CONTROLS_API:
-        app.register_blueprint(
-            get_orchestration_controls(
-                orchestrator,
-                orchestrator_loader.data,
-                orchestrator_settings={
-                    "cwd": config.FS_MOUNT_POINT,
-                    "interval": config.ORCHESTRATION_ORCHESTRATOR_INTERVAL,
-                },
-                daemon_settings={
-                    "interval": config.ORCHESTRATION_DAEMON_INTERVAL,
-                }
-            ),
-            url_prefix="/"
-        )
-
     # register blueprints
     app.register_blueprint(
-        DefaultView(config, ready=ready).get_blueprint(),
-        url_prefix="/"
+        DefaultView(config, ready=ready).get_blueprint(), url_prefix="/"
     )
-    app.register_blueprint(
-        view_external.get_blueprint(),
-        url_prefix="/"
-    )
-    app.register_blueprint(
-        view_internal.get_blueprint(),
-        url_prefix="/"
-    )
-    app.register_blueprint(
-        ReportView(config, orchestrator).get_blueprint(),
-        url_prefix="/"
-    )
+    app.register_blueprint(view_ies.get_blueprint(), url_prefix="/")
+    app.register_blueprint(view_ips.get_blueprint(), url_prefix="/")
+    app.register_blueprint(ReportView(config).get_blueprint(), url_prefix="/")
 
     return app

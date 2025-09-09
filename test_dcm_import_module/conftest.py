@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import pytest
@@ -7,7 +6,7 @@ from dcm_common.services.tests import (
     fs_setup, fs_cleanup, external_service, run_service, wait_for_report
 )
 
-from dcm_import_module import app_factory, config
+from dcm_import_module import config
 from dcm_import_module.plugins import DemoPlugin
 
 
@@ -43,22 +42,12 @@ def _testing_config(file_storage):
         TESTING = True
         FS_MOUNT_POINT = file_storage
         SUPPORTED_PLUGINS = [DemoPlugin]
-        ORCHESTRATION_AT_STARTUP = False
-        ORCHESTRATION_DAEMON_INTERVAL = 0.001
-        ORCHESTRATION_ORCHESTRATOR_INTERVAL = 0.001
-        ORCHESTRATION_ABORT_NOTIFICATIONS_STARTUP_INTERVAL = 0.01
+        ORCHESTRA_DAEMON_INTERVAL = 0.01
+        ORCHESTRA_WORKER_INTERVAL = 0.01
+        ORCHESTRA_WORKER_ARGS = {"messages_interval": 0.01}
+        SERVICE_POLL_INTERVAL = 0.1
 
     return TestingConfig
-
-
-# Test-app
-@pytest.fixture(name="client")
-def _client(testing_config):
-    """
-    Returns test_client.
-    """
-
-    return app_factory(testing_config(), block=True).test_client()
 
 
 @pytest.fixture(name="minimal_request_body_external")
@@ -163,15 +152,24 @@ def _fake_builder_service(
 ):
     return external_service(
         routes=[
-            ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
-            ("/validate", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
+            (
+                "/build",
+                lambda: (jsonify(value="abcdef", expires=False), 201),
+                ["POST"],
+            ),
+            (
+                "/validate",
+                lambda: (jsonify(value="ghijkl", expires=False), 201),
+                ["POST"],
+            ),
             (
                 "/report",
-                lambda:
+                lambda: (
                     (jsonify(**fake_build_report), 200)
-                    if request.args["token"] == "abcdef" else
-                    (jsonify(**fake_validation_report), 200),
-                ["GET"]
+                    if request.args["token"] == "abcdef"
+                    else (jsonify(**fake_validation_report), 200)
+                ),
+                ["GET"],
             ),
         ]
     )
@@ -183,15 +181,24 @@ def _fake_builder_service_fail(
 ):
     return external_service(
         routes=[
-            ("/build", lambda: (jsonify(value="abcdef", expires=False), 201), ["POST"]),
-            ("/validate", lambda: (jsonify(value="ghijkl", expires=False), 201), ["POST"]),
+            (
+                "/build",
+                lambda: (jsonify(value="abcdef", expires=False), 201),
+                ["POST"],
+            ),
+            (
+                "/validate",
+                lambda: (jsonify(value="ghijkl", expires=False), 201),
+                ["POST"],
+            ),
             (
                 "/report",
-                lambda:
+                lambda: (
                     (jsonify(**fake_build_report_fail), 200)
-                    if request.args["token"] == "abcdef" else
-                    (jsonify(**fake_validation_report_fail), 200),
-                ["GET"]
+                    if request.args["token"] == "abcdef"
+                    else (jsonify(**fake_validation_report_fail), 200)
+                ),
+                ["GET"],
             ),
         ]
     )

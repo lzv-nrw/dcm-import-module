@@ -5,20 +5,20 @@ Test module for the `dcm_import_module/handlers.py`.
 import pytest
 from data_plumber_http.settings import Responses
 
-from dcm_import_module.models import ImportConfigExternal, ImportConfigInternal
+from dcm_import_module.models import ImportConfigIEs, ImportConfigIPs
 from dcm_import_module import handlers
 
 
-@pytest.fixture(name="external_import_handler")
-def _external_import_handler(testing_config):
-    return handlers.get_external_import_handler(
+@pytest.fixture(name="ies_import_handler")
+def _ies_import_handler(testing_config):
+    return handlers.get_ies_import_handler(
         testing_config().supported_plugins
     )
 
 
-@pytest.fixture(name="internal_import_handler")
-def _internal_import_handler(testing_config):
-    return handlers.get_internal_import_handler(
+@pytest.fixture(name="ips_import_handler")
+def _ips_import_handler(testing_config):
+    return handlers.get_ips_import_handler(
         testing_config().FS_MOUNT_POINT
     )
 
@@ -72,15 +72,15 @@ def _internal_import_handler(testing_config):
     ),
     ids=[f"stage {i+1}" for i in range(len(pytest_args))],
 )
-def test_external_import_handler(external_import_handler, json, status):
-    """Test external_import_handler."""
+def test_ies_import_handler(ies_import_handler, json, status):
+    """Test ies_import_handler."""
 
-    output = external_import_handler.run(json=json)
+    output = ies_import_handler.run(json=json)
 
     assert output.last_status == status
     if output.last_status == Responses.GOOD.status:
         assert "import_" in output.data.value
-        assert isinstance(output.data.value["import_"], ImportConfigExternal)
+        assert isinstance(output.data.value["import_"], ImportConfigIEs)
     else:
         print(output.last_message)
 
@@ -141,14 +141,14 @@ def test_external_import_handler(external_import_handler, json, status):
     ),
     ids=[f"stage {i+1}" for i in range(len(pytest_args))],
 )
-def test_internal_import_handler(internal_import_handler, json, status):
-    """Test internal_import_handler."""
+def test_ips_import_handler(ips_import_handler, json, status):
+    """Test ips_import_handler."""
 
-    output = internal_import_handler.run(json=json)
+    output = ips_import_handler.run(json=json)
 
     assert output.last_status == status
     if output.last_status == Responses.GOOD.status:
         assert "import_" in output.data.value
-        assert isinstance(output.data.value["import_"], ImportConfigInternal)
+        assert isinstance(output.data.value["import_"], ImportConfigIPs)
     else:
         print(output.last_message)

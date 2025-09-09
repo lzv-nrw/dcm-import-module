@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 import random
 
-from dcm_common.logger import LoggingContext as Context
+from dcm_common.logger import LoggingContext
 from dcm_common.plugins import Signature, Argument, JSONType
 
 from dcm_import_module.models import IE
@@ -182,7 +182,7 @@ class DemoPlugin(IEImportPlugin):
 
     def _get(self, context: IEImportContext, /, **kwargs) -> IEImportResult:
         # initialize
-        context.result.log.log(Context.INFO, body="Starting to generate IEs.")
+        context.result.log.log(LoggingContext.INFO, body="Starting to generate IEs.")
         context.set_progress("generating IEs")
         context.push()
 
@@ -199,13 +199,13 @@ class DemoPlugin(IEImportPlugin):
                 identifier, idx % 2 == 0 if kwargs["bad_ies"] else True, kwargs
             )
             context.result.log.log(
-                Context.INFO,
+                LoggingContext.INFO,
                 body=f"Created IE in '{context.result.ies[ie_id].path}'.",
                 origin=self._NAME,
             )
             if not context.result.ies[ie_id].fetched_payload:
                 context.result.log.log(
-                    Context.ERROR,
+                    LoggingContext.ERROR,
                     body=f"Missing payload in IE '{ie_id}'.",
                     origin=self._NAME,
                 )

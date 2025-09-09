@@ -1,6 +1,6 @@
-from .import_external import ExternalImportView
-from .import_internal import InternalImportView
+from .import_ies import ImportIEsView
+from .import_ips import ImportIPsView
 
 __all__ = [
-    "ExternalImportView", "InternalImportView", 
+    "ImportIEsView", "ImportIPsView", 
 ]

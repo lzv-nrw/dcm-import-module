@@ -5,7 +5,8 @@ Specific `Report` data-model definition for the Import Module
 from dataclasses import dataclass, field
 from typing import Optional
 
-from dcm_common.models import JSONObject, DataModel, Report as BaseReport
+from dcm_common.models import JSONObject, DataModel
+from dcm_common.orchestra import Report as BaseReport
 
 from dcm_import_module.models.import_result import ImportResult
 
