@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    version="5.0.0",
+    version="5.1.0",
     name="dcm-import-module",
     description="flask app implementing the DCM Import Module API",
     author="LZV.nrw",
@@ -14,7 +14,7 @@ setup(
         "data-plumber-http>=1.0.0,<2",
         "dcm-common[services, orchestra]>=4.0.0,<5",
         "oai-pmh-extractor>=3.4.0,<4",
-        "dcm-import-module-api>=7.0.0,<8",
+        "dcm-import-module-api>=7.1.0,<8",
         "dcm-ip-builder-sdk>=6.0.0,<7",
         "dcm-object-validator-sdk>=6.0.0,<7",
     ],

@@ -9,6 +9,7 @@ from dcm_common.services import FSConfig, OrchestratedAppConfig
 import dcm_import_module_api
 
 from dcm_import_module.plugins import OAIPMHPlugin, OAIPMHPlugin2, DemoPlugin
+from dcm_import_module import util
 
 
 class AppConfig(FSConfig, OrchestratedAppConfig):
@@ -23,8 +24,9 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         int(os.environ.get("SOURCE_SYSTEM_TIMEOUT_RETRY_INTERVAL") or 360)
     # determine if test-plugin should available
     USE_DEMO_PLUGIN = (int(os.environ.get("USE_DEMO_PLUGIN") or 0)) == 1
-    # output directory for ie-extraction (relative to FS_MOUNT_POINT)
+    # output directory for ie- and ip-import (relative to FS_MOUNT_POINT)
     IE_OUTPUT = Path(os.environ.get("IE_OUTPUT") or "ie/")
+    IP_OUTPUT = Path(os.environ.get("IP_OUTPUT") or "ip/")
     # test-imports
     IMPORT_TEST_STRATEGY = os.environ.get("IMPORT_TEST_STRATEGY", "first")
     IMPORT_TEST_VOLUME = int(os.environ.get("IMPORT_TEST_VOLUME") or 2)
@@ -38,6 +40,8 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
         if "OAI_MAX_RESUMPTION_TOKENS" in os.environ
         else None
     )
+    # hotfolders
+    HOTFOLDER_SRC = os.environ.get("HOTFOLDER_SRC", "[]")
 
     # ------ SERVICE ADAPTERS ------
     SERVICE_TIMEOUT = int(os.environ.get("SERVICE_TIMEOUT") or 3600)
@@ -57,6 +61,7 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
     )
 
     def __init__(self, **kwargs) -> None:
+        # load plugins
         self.supported_plugins = {}
         for Plugin in self.SUPPORTED_PLUGINS:
             self.supported_plugins[Plugin.name] = Plugin(
@@ -66,6 +71,14 @@ class AppConfig(FSConfig, OrchestratedAppConfig):
                 max_resumption_tokens=self.OAI_MAX_RESUMPTION_TOKENS,
                 test_strategy=self.IMPORT_TEST_STRATEGY,
                 test_volume=self.IMPORT_TEST_VOLUME,
+            )
+
+        # load hotfolders
+        if (hotfolder_src := Path(self.HOTFOLDER_SRC)).is_file():
+            self.hotfolders = util.load_hotfolders_from_file(hotfolder_src)
+        else:
+            self.hotfolders = util.load_hotfolders_from_string(
+                self.HOTFOLDER_SRC
             )
 
         super().__init__(**kwargs)

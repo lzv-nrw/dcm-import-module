@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.1.0] - 2025-09-16
+
+### Changed
+
+- updated `/import/ips`-type job to move data to internal storage
+
+### Added
+
+- added support for hotfolder-based imports
+
 ## [5.0.0] - 2025-09-09
 
 ### Changed

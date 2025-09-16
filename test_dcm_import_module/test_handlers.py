@@ -17,10 +17,8 @@ def _ies_import_handler(testing_config):
 
 
 @pytest.fixture(name="ips_import_handler")
-def _ips_import_handler(testing_config):
-    return handlers.get_ips_import_handler(
-        testing_config().FS_MOUNT_POINT
-    )
+def _ips_import_handler():
+    return handlers.ips_import_handler
 
 
 @pytest.mark.parametrize(
@@ -96,8 +94,15 @@ def test_ies_import_handler(ies_import_handler, json, status):
             ({"import": {"target": None}}, 422),
             ({"import": {"target": {"unknown": None}}}, 400),
             ({"import": {"target": {"path": None}}}, 422),
-            ({"import": {"target": {"path": "does-not-exist"}}}, 404),
             ({"import": {"target": {"path": "."}}}, Responses.GOOD.status),
+            (
+                {"import": {"target": {"path": ".", "hotfolderId": None}}},
+                422,
+            ),
+            (
+                {"import": {"target": {"path": ".", "hotfolderId": "0"}}},
+                Responses.GOOD.status,
+            ),
             (
                 {
                     "import": {"target": {"path": "."}},

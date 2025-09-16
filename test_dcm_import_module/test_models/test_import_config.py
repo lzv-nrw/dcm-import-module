@@ -16,6 +16,14 @@ test_importconfigies_json = get_model_serialization_test(
 )
 
 
+test_target_json = get_model_serialization_test(
+    Target, (
+        ((Path("."),), {}),
+        ((Path("."), "0"), {}),
+    )
+)
+
+
 test_importconfigips_json = get_model_serialization_test(
     ImportConfigIPs, (
         ((Target(Path(".")),), {}),

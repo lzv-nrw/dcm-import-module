@@ -5,8 +5,8 @@ Import View-class definition
 from typing import Optional
 from pathlib import Path
 from random import sample
-import os
 from uuid import uuid4
+from shutil import copytree, rmtree
 
 from flask import Blueprint, jsonify, Response, request
 from data_plumber_http.decorators import flask_handler, flask_args, flask_json
@@ -20,7 +20,7 @@ from dcm_common.orchestra.models import (
 from dcm_common.util import list_directory_content
 
 from dcm_import_module.models import ImportConfigIPs, IP, Report
-from dcm_import_module.handlers import get_ips_import_handler
+from dcm_import_module.handlers import ips_import_handler
 from dcm_import_module.components import (
     SpecificationValidationAdapter,
     ObjectValidationAdapter,
@@ -44,7 +44,7 @@ class ImportIPsView(services.OrchestratedView):
             json=flask_args,
         )
         @flask_handler(  # process import_/validation
-            handler=get_ips_import_handler(self.config.FS_MOUNT_POINT),
+            handler=ips_import_handler,
             json=flask_json,
         )
         def import_ips(
@@ -55,6 +55,51 @@ class ImportIPsView(services.OrchestratedView):
             callback_url: Optional[str] = None,
         ):
             """Handle request for importing IPs."""
+            # run additional checks not covered by handler
+            if import_.target.hotfolder_id is None:
+                # no hotfolder
+                # * target is not a directory
+                if not (
+                    self.config.FS_MOUNT_POINT / import_.target.path
+                ).is_dir():
+                    return Response(
+                        f"Directory '{import_.target.path}' is invalid (does "
+                        + "not exist or not a directory).",
+                        mimetype="text/plain",
+                        status=404,
+                    )
+            else:
+                # hotfolder
+                # * unknown hotfolder
+                if import_.target.hotfolder_id not in self.config.hotfolders:
+                    return Response(
+                        "Unknown hotfolder identifier "
+                        + f"'{import_.target.hotfolder_id}'.",
+                        mimetype="text/plain",
+                        status=404,
+                    )
+                # * hotfolder not available
+                if not self.config.hotfolders[
+                    import_.target.hotfolder_id
+                ].mount.is_dir():
+                    return Response(
+                        "Encountered a bad hotfolder configuration with id "
+                        + f"'{import_.target.hotfolder_id}' (hotfolder is not "
+                        + "mounted). Please contact the system administrator.",
+                        mimetype="text/plain",
+                        status=404,
+                    )
+                # * target is not a directory
+                if not (
+                    self.config.hotfolders[import_.target.hotfolder_id].mount
+                    / import_.target.path
+                ).is_dir():
+                    return Response(
+                        f"Hotfolder directory '{import_.target.path}' is "
+                        + "invalid (does not exist or not a directory).",
+                        mimetype="text/plain",
+                        status=404,
+                    )
             try:
                 token = self.config.controller.queue_push(
                     token or str(uuid4()),
@@ -95,7 +140,6 @@ class ImportIPsView(services.OrchestratedView):
 
     def import_ips(self, context: JobContext, info: JobInfo):
         """Job instructions for the '/import/ips' endpoint."""
-        os.chdir(self.config.FS_MOUNT_POINT)
         import_config = ImportConfigIPs.from_json(
             info.config.request_body["import"]
         )
@@ -121,13 +165,53 @@ class ImportIPsView(services.OrchestratedView):
         info.report.data.ips = {}
         context.push()
 
+        if import_config.target.hotfolder_id is None:
+            base_directory = self.config.FS_MOUNT_POINT.resolve()
+        else:
+            if import_config.target.hotfolder_id not in self.config.hotfolders:
+                info.report.log.log(
+                    LoggingContext.ERROR,
+                    body=(
+                        "Missing hotfolder configuration with id "
+                        + f"'{import_config.target.hotfolder_id}'."
+                    ),
+                )
+                context.push()
+                self._run_callback(
+                    context, info, info.config.request_body.get("callback_url")
+                )
+                return
+            base_directory = self.config.hotfolders[
+                import_config.target.hotfolder_id
+            ].mount.resolve()
+            if not base_directory.is_dir():
+                info.report.log.log(
+                    LoggingContext.ERROR,
+                    body=(
+                        f"Hotfolder '{import_config.target.hotfolder_id}' "
+                        + (
+                            f"({self.config.hotfolders[import_config.target.hotfolder_id].name}) "
+                            if self.config.hotfolders[
+                                import_config.target.hotfolder_id
+                            ].name
+                            is not None
+                            else ""
+                        )
+                        + "is not mounted."
+                    ),
+                )
+                context.push()
+                self._run_callback(
+                    context, info, info.config.request_body.get("callback_url")
+                )
+                return
         if import_config.batch:
             potential_ips = list_directory_content(
-                import_config.target.path,
+                base_directory / import_config.target.path,
                 condition_function=lambda p: p.is_dir(),
             )
         else:
-            potential_ips = [import_config.target.path]
+            potential_ips = [base_directory / import_config.target.path]
 
         # filter implausible
         ips = []
@@ -169,7 +253,21 @@ class ImportIPsView(services.OrchestratedView):
                     )
 
         for i, ip in enumerate(ips):
-            info.report.data.ips[ip.name] = IP(ip)
+            # copy to IP_OUTPUT
+            dest = (
+                self.config.FS_MOUNT_POINT
+                / self.config.IP_OUTPUT
+                / str(uuid4())
+            )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            copytree(ip, dest)
+            # add to report
+            info.report.data.ips[ip.name] = IP(
+                dest.relative_to(self.config.FS_MOUNT_POINT)
+            )
+            context.push()
+            # remove source
+            rmtree(ip)
 
         # perform validation if requested
         spec_validation = info.config.request_body.get("spec_validation")

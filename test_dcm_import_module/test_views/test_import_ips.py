@@ -5,6 +5,7 @@ Test module for the `dcm_import_module/views/import_ips.py`.
 from pathlib import Path
 from time import sleep, time
 from uuid import uuid4
+from json import dumps
 
 import pytest
 from flask import jsonify, Response
@@ -15,11 +16,11 @@ from dcm_import_module import app_factory
 
 @pytest.fixture(name="minimal_request_body")
 def _minimal_request_body(create_fake_ip):
-    hotfolder = Path(str(uuid4()))
-    create_fake_ip(hotfolder / "ip0")
+    subdir = Path(str(uuid4()))
+    create_fake_ip(subdir / "ip0")
     return {
         "import": {
-            "target": {"path": str(hotfolder)},
+            "target": {"path": str(subdir)},
         }
     }
 
@@ -46,6 +47,12 @@ def test_import_minimal(minimal_request_body, testing_config):
     app = app_factory(testing_config())
     client = app.test_client()
 
+    assert (
+        testing_config.FS_MOUNT_POINT
+        / minimal_request_body["import"]["target"]["path"]
+        / "ip0"
+    ).is_dir()
+
     # make request for import
     response = client.post("/import/ips", json=minimal_request_body)
     assert response.status_code == 201
@@ -58,9 +65,126 @@ def test_import_minimal(minimal_request_body, testing_config):
     assert report["data"]["success"]
     assert len(report["data"]["IPs"]) == 1
     assert "ip0" in report["data"]["IPs"]
-    assert report["data"]["IPs"]["ip0"]["path"].startswith(
+    # IP is at new location
+    assert not report["data"]["IPs"]["ip0"]["path"].startswith(
         minimal_request_body["import"]["target"]["path"]
     )
+    assert testing_config.IP_OUTPUT in Path(report["data"]["IPs"]["ip0"]["path"]).parents
+    assert (
+        testing_config.FS_MOUNT_POINT / report["data"]["IPs"]["ip0"]["path"]
+    ).is_dir()
+    # IP removed from old location
+    assert not (
+        testing_config.FS_MOUNT_POINT
+        / minimal_request_body["import"]["target"]["path"]
+        / "ip0"
+    ).is_dir()
+
+
+def test_import_minimal_w_hotfolder(
+    minimal_request_body, file_storage, testing_config, create_fake_ip
+):
+    """Minimal test of /import/ips-endpoint using hotfolder."""
+
+    hotfolder = file_storage / str(uuid4())
+    directory = hotfolder / "job-0"
+    directory.mkdir(parents=True)
+    create_fake_ip(directory.relative_to(file_storage) / "ip0")
+
+    class ConfigWithHotfolders(testing_config):
+        HOTFOLDER_SRC = dumps([{"id": "1", "mount": str(hotfolder)}])
+
+    app = app_factory(ConfigWithHotfolders())
+    client = app.test_client()
+
+    assert (directory / "ip0").is_dir()
+
+    # make request for import
+    minimal_request_body["import"]["target"]["hotfolderId"] = "1"
+    minimal_request_body["import"]["target"]["path"] = "job-0"
+    response = client.post("/import/ips", json=minimal_request_body)
+    assert response.status_code == 201
+
+    app.extensions["orchestra"].stop(stop_on_idle=True)
+    report = client.get(f"/report?token={response.json['value']}").json
+
+    assert report["data"]["success"]
+    assert len(report["data"]["IPs"]) == 1
+    assert "ip0" in report["data"]["IPs"]
+    # IP is at new location
+    assert not report["data"]["IPs"]["ip0"]["path"].startswith(
+        minimal_request_body["import"]["target"]["path"]
+    )
+    assert testing_config.IP_OUTPUT in Path(report["data"]["IPs"]["ip0"]["path"]).parents
+    assert (
+        testing_config.FS_MOUNT_POINT / report["data"]["IPs"]["ip0"]["path"]
+    ).is_dir()
+    # IP removed from old location
+    assert not (directory / "ip0").is_dir()
+
+
+def test_import_rejected_does_not_exist(
+    file_storage, create_fake_ip, testing_config, minimal_request_body
+):
+    """Test submission when target is missing."""
+
+    hotfolder = file_storage / str(uuid4())
+    directory = hotfolder / "job-0"
+    directory.mkdir(parents=True)
+    create_fake_ip(directory.relative_to(file_storage) / "ip0")
+
+    class ConfigWithHotfolders(testing_config):
+        HOTFOLDER_SRC = dumps(
+            [
+                {
+                    "id": "1",
+                    "mount": str(hotfolder),
+                    "name": "hotfolder 1",
+                    "description": "description 1"
+                },
+            ]
+        )
+    app = app_factory(ConfigWithHotfolders())
+    client = app.test_client()
+    app.extensions["orchestra"].stop(stop_on_idle=True)
+
+    # make request for import
+    # * baseline
+    assert client.post(
+        "/import/ips",
+        json=minimal_request_body,
+    ).status_code == 201
+    # * path does not exist
+    response = client.post(
+        "/import/ips",
+        json={"import": {"target": {"path": "a"}, "batch": True}},
+    )
+    print(response.data)
+    assert response.status_code == 404
+    # * hotfolder does not exist
+    response = client.post(
+        "/import/ips",
+        json={
+            "import": {
+                "target": {"path": "a", "hotfolderId": "0"},
+                "batch": True,
+            }
+        },
+    )
+    print(response.data)
+    assert response.status_code == 404
+    # * hotfolder path does not exist
+    response = client.post(
+        "/import/ips",
+        json={
+            "import": {
+                "target": {"path": "a", "hotfolderId": "1"},
+                "batch": True,
+            }
+        },
+    )
+    print(response.data)
+    assert response.status_code == 404
 
 
 def test_import_with_spec_validation(
@@ -174,13 +298,13 @@ def test_import_batch_multiple(create_fake_ip, testing_config):
     app = app_factory(testing_config())
     client = app.test_client()
 
-    hotfolder = Path(str(uuid4()))
-    create_fake_ip(hotfolder / "ip0")
-    create_fake_ip(hotfolder / "ip1")
+    subdir = Path(str(uuid4()))
+    create_fake_ip(subdir / "ip0")
+    create_fake_ip(subdir / "ip1")
     # make request for import
     response = client.post(
         "/import/ips",
-        json={"import": {"target": {"path": str(hotfolder)}, "batch": True}},
+        json={"import": {"target": {"path": str(subdir)}, "batch": True}},
     )
 
     app.extensions["orchestra"].stop(stop_on_idle=True)
@@ -200,14 +324,14 @@ def test_import_no_batch(create_fake_ip, testing_config):
     app = app_factory(testing_config())
     client = app.test_client()
 
-    hotfolder = Path(str(uuid4()))
-    create_fake_ip(hotfolder / "ip0")
+    subdir = Path(str(uuid4()))
+    create_fake_ip(subdir / "ip0")
     # make request for import
     response = client.post(
         "/import/ips",
         json={
             "import": {
-                "target": {"path": str(hotfolder / "ip0")},
+                "target": {"path": str(subdir / "ip0")},
                 "batch": False,
             }
         },
@@ -295,16 +419,16 @@ def test_import_builder_unavailable(
 
 
 def test_import_empty(file_storage, testing_config):
-    """Test of /import/ips-endpoint for empty hotfolder."""
+    """Test of /import/ips-endpoint for empty subdir."""
 
     app = app_factory(testing_config())
     client = app.test_client()
 
-    hotfolder = str(uuid4())
-    (file_storage / hotfolder).mkdir()
+    subdir = str(uuid4())
+    (file_storage / subdir).mkdir()
     # make request for import
     response = client.post(
-        "/import/ips", json={"import": {"target": {"path": hotfolder}}}
+        "/import/ips", json={"import": {"target": {"path": subdir}}}
     )
 
     app.extensions["orchestra"].stop(stop_on_idle=True)
@@ -316,23 +440,23 @@ def test_import_empty(file_storage, testing_config):
 
 def test_import_non_ips(file_storage, create_fake_ip, testing_config):
     """
-    Test of /import/ips-endpoint for hotfolder containing non-IPs.
+    Test of /import/ips-endpoint for subdir containing non-IPs.
     """
 
     app = app_factory(testing_config())
     client = app.test_client()
 
-    hotfolder = Path(str(uuid4()))
-    (file_storage / hotfolder).mkdir()
-    create_fake_ip(hotfolder / "ip0")
-    create_fake_ip(hotfolder / "no-ip")
-    (file_storage / hotfolder / "no-ip" / "bagit.txt").unlink()
-    (file_storage / hotfolder / "some-file").touch()
+    subdir = Path(str(uuid4()))
+    (file_storage / subdir).mkdir()
+    create_fake_ip(subdir / "ip0")
+    create_fake_ip(subdir / "no-ip")
+    (file_storage / subdir / "no-ip" / "bagit.txt").unlink()
+    (file_storage / subdir / "some-file").touch()
 
     # make request for import
     response = client.post(
         "/import/ips",
-        json={"import": {"target": {"path": str(hotfolder)}}},
+        json={"import": {"target": {"path": str(subdir)}}},
     )
 
     app.extensions["orchestra"].stop(stop_on_idle=True)
@@ -444,14 +568,14 @@ def test_import_test(
     app = app_factory(ThisConfig())
     client = app.test_client()
 
-    hotfolder = Path(str(uuid4()))
-    create_fake_ip(hotfolder / "ip0")
-    create_fake_ip(hotfolder / "ip1")
-    create_fake_ip(hotfolder / "ip2")
+    subdir = Path(str(uuid4()))
+    create_fake_ip(subdir / "ip0")
+    create_fake_ip(subdir / "ip1")
+    create_fake_ip(subdir / "ip2")
     # make request for test-import
     token = client.post(
         "/import/ips",
-        json={"import": {"target": {"path": str(hotfolder)}, "test": True}},
+        json={"import": {"target": {"path": str(subdir)}, "test": True}},
     ).json["value"]
 
     app.extensions["orchestra"].stop(stop_on_idle=True)

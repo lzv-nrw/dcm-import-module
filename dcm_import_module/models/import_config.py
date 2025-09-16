@@ -2,6 +2,7 @@
 ImportConfig data-model definitions
 """
 
+from typing import Optional
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,10 +19,15 @@ class Target(DataModel):
     Target `DataModel`
 
     Keyword arguments:
-    path -- path to target directory/file relative to `FS_MOUNT_POINT`
+    path -- path to target directory/file
+            (if hotfolder_id relative to that hotfolder-mount point,
+            otherwise relative to `FS_MOUNT_POINT`)
+    hotfolder_id -- hotfolder identifier
+                    (default None)
     """
 
     path: Path
+    hotfolder_id: Optional[str] = None
 
     @DataModel.serialization_handler("path")
     @classmethod
@@ -34,6 +40,22 @@ class Target(DataModel):
     def path_deserialization(cls, value):
         """Performs `path`-deserialization."""
         return Path(value)
+
+    @DataModel.serialization_handler("hotfolder_id", "hotfolderId")
+    @classmethod
+    def hotfolder_id_serialization(cls, value):
+        """Performs `hotfolder_id`-serialization."""
+        if value is None:
+            DataModel.skip()
+        return value
+
+    @DataModel.deserialization_handler("hotfolder_id", "hotfolderId")
+    @classmethod
+    def hotfolder_id_deserialization(cls, value):
+        """Performs `hotfolder_id`-deserialization."""
+        if value is None:
+            DataModel.skip()
+        return value
 
 
 @dataclass

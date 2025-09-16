@@ -106,7 +106,8 @@ The expected call signatures for individual plugins are provided via the API (en
 
 ## Environment/Configuration
 Service-specific environment variables are
-* `IE_OUTPUT` [DEFAULT "ie/"] output directory for extracted IEs (relative to `FS_MOUNT_POINT`)
+* `IE_OUTPUT` [DEFAULT "ie/"] output directory for imported IEs (relative to `FS_MOUNT_POINT`)
+* `IP_OUTPUT` [DEFAULT "ip/"] output directory for imported IPs (relative to `FS_MOUNT_POINT`)
 * `IMPORT_TEST_STRATEGY` [DEFAULT "first"] strategy for selecting records during a test-import
   * `"first"`: use records in their order of appearance
   * `"random"`: randomize records in every call
@@ -115,6 +116,17 @@ Service-specific environment variables are
 * `SOURCE_SYSTEM_TIMEOUT_RETRIES` [DEFAULT 3]: number of retries for failed import
 * `OAI_MAX_RESUMPTION_TOKENS` [DEFAULT null]: maximum number of processed resumption tokens during an import with an OAI-PMH-Plugin; only relevant when positive
 * `USE_DEMO_PLUGIN` [DEFAULT 0]: make the demo-plugin available
+* `HOTFOLDER_SRC` [DEFAULT '[]']: array of hotfolders as JSON or path to a (UTF-8 encoded) JSON-file; every entry of that array needs to have the following signature
+  ```json
+  {
+    "id": "<unique id>",
+    "mount": "<mount path of the hotfolder>",
+    "name": "<(optional) name of hotfolder>",
+    "description": "<(optional) description for hotfolder>"
+  }
+  ```
+
+  Note that the identifier needs to match the hotfolder-configuration used in the [Backend](https://github.com/lzv-nrw/dcm-backend).
 * `SERVICE_TIMEOUT` [DEFAULT 3600]: time until a job in another service times out in seconds
 * `SERVICE_POLL_INTERVAL` [DEFAULT 1]: interval for polling of another service in seconds
 * `IP_BUILDER_HOST` [DEFAULT http://localhost:8081] host address for IP Builder-service
