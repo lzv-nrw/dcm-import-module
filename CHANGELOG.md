@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.1.1] - 2025-10-01
+
+### Fixed
+
+- fixed deleting hotfolder-contents during test-import job (`/import/ips`)
+
 ## [5.1.0] - 2025-09-16
 
 ### Changed

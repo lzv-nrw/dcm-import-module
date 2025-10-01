@@ -553,6 +553,7 @@ def test_import_abort(
     ],
 )
 def test_import_test(
+    file_storage,
     create_fake_ip,
     testing_config,
     max_records,
@@ -583,3 +584,6 @@ def test_import_test(
 
     assert report["data"]["success"]
     assert len(report["data"]["IPs"]) == expected_ips
+    assert (file_storage / subdir / "ip0").is_dir()
+    assert (file_storage / subdir / "ip1").is_dir()
+    assert (file_storage / subdir / "ip2").is_dir()

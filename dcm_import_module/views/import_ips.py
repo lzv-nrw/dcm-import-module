@@ -267,7 +267,8 @@ class ImportIPsView(services.OrchestratedView):
             )
             context.push()
             # remove source
-            rmtree(ip)
+            if not import_config.test:
+                rmtree(ip)
 
         # perform validation if requested
         spec_validation = info.config.request_body.get("spec_validation")
